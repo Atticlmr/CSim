@@ -83,8 +83,12 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           xvfb-run -a xmake run csim_python tests/viewer/python_viewer_test.py
-          xmake run csim_python examples/python/record_payload.py build/ci-flight.csv --duration 2
-          xvfb-run -a xmake run viewer --hidden --frames 121 --screenshot build/viewer-live.ppm
-          python3 tests/viewer/check_image.py build/viewer-live.ppm
-          xvfb-run -a xmake run viewer build/ci-flight.csv --hidden --frames 121 --screenshot build/viewer-replay.ppm
-          python3 tests/viewer/check_image.py build/viewer-replay.ppm
+          # xmake may launch targets with their target directory as cwd. Use
+          # absolute artifact paths so recording, screenshots and checks all
+          # address the workspace-level build directory consistently.
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          xmake run csim_python examples/python/record_payload.py "$GITHUB_WORKSPACE/build/ci-flight.csv" --duration 2
+          xvfb-run -a xmake run viewer --hidden --frames 121 --screenshot "$GITHUB_WORKSPACE/build/viewer-live.ppm"
+          python3 tests/viewer/check_image.py "$GITHUB_WORKSPACE/build/viewer-live.ppm"
+          xvfb-run -a xmake run viewer "$GITHUB_WORKSPACE/build/ci-flight.csv" --hidden --frames 121 --screenshot "$GITHUB_WORKSPACE/build/viewer-replay.ppm"
+          python3 tests/viewer/check_image.py "$GITHUB_WORKSPACE/build/viewer-replay.ppm"
