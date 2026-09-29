@@ -1,0 +1,9 @@
+include LICENSE README.md xmake.lua pyproject.toml setup.py
+recursive-include include *.hpp
+recursive-include bindings *.hpp *.cpp *.py *.lua *.vert *.frag
+recursive-include apps *.cpp *.hpp *.lua *.vert *.frag
+recursive-include tests *.cpp *.py *.urdf *.xml *.md *.json
+recursive-include examples *.py *.urdf *.xml *.obj
+recursive-include docs *.md
+recursive-include src *.md *.cpp *.hpp
+recursive-include configs *.json *.md

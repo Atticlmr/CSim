@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- Original CSim visual sample, illustrative mass/inertia, no contact. -->
+<robot name="example_drone"><link name="frame">
+<inertial><origin xyz="0 0 0"/><mass value="1"/><inertia ixx=".02" ixy="0" ixz="0" iyy=".02" iyz="0" izz=".04"/></inertial>
+<visual name="body"><origin xyz="0 0 0" rpy="0 0 0"/><geometry><mesh filename="body.obj" scale=".4 .25 .12"/></geometry><material name="body"><color rgba="0.2 0.7 0.8 1"/></material></visual>
+<visual name="arm_a"><origin xyz="0 0 0" rpy="0 0 0.7853981633974483"/><geometry><box size=".9 .04 .03"/></geometry><material name="arm_a"><color rgba="0.7 0.8 0.85 1"/></material></visual>
+<visual name="arm_b"><origin xyz="0 0 0" rpy="0 0 -0.7853981633974483"/><geometry><box size=".9 .04 .03"/></geometry><material name="arm_b"><color rgba="0.7 0.8 0.85 1"/></material></visual>
+<visual name="rotor_0"><origin xyz="0.3 0.3 .08" rpy="0 0 0"/><geometry><cylinder radius=".18" length=".025"/></geometry><material name="rotor_0"><color rgba="0.9 0.3 0.2 1"/></material></visual>
+<visual name="rotor_1"><origin xyz="-0.3 0.3 .08" rpy="0 0 0"/><geometry><cylinder radius=".18" length=".025"/></geometry><material name="rotor_1"><color rgba="0.2 0.35 0.5 1"/></material></visual>
+<visual name="rotor_2"><origin xyz="-0.3 -0.3 .08" rpy="0 0 0"/><geometry><cylinder radius=".18" length=".025"/></geometry><material name="rotor_2"><color rgba="0.2 0.35 0.5 1"/></material></visual>
+<visual name="rotor_3"><origin xyz="0.3 -0.3 .08" rpy="0 0 0"/><geometry><cylinder radius=".18" length=".025"/></geometry><material name="rotor_3"><color rgba="0.9 0.3 0.2 1"/></material></visual>
+</link></robot>

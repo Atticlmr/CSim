@@ -1,0 +1,90 @@
+name: xmake CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Ubuntu / ${{ matrix.mode }} / viewer=${{ matrix.viewer }} / python=${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug, release]
+        viewer: ["n", "y"]
+        include:
+          - viewer: "n"
+            python: "n"
+          - viewer: "y"
+            python: "y"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: '3.1.1'
+
+      - name: Install XML dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libtinyxml2-dev
+
+      - name: Install viewer and Python dependencies
+        if: matrix.viewer == 'y'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libglfw3-dev libgl1-mesa-dev libgl1-mesa-dri xvfb xauth python3-dev python3-pybind11
+
+      - name: Configure
+        run: xmake f -y -m ${{ matrix.mode }} --viewer=${{ matrix.viewer }} --python=${{ matrix.python }} --python_executable=/usr/bin/python3
+
+      - name: Build
+        run: xmake build -y -j 2
+
+      - name: Run simulator
+        run: |
+          xmake run simulator
+          xmake run simulator drone
+          xmake run simulator payload
+
+      - name: Run unit tests
+        run: xmake test -v
+
+      - name: Run Python pendulum experiment
+        if: matrix.python == 'y'
+        run: xmake run csim_python examples/python/pendulum.py
+
+      - name: Run Python drone experiment
+        if: matrix.python == 'y'
+        run: xmake run csim_python examples/python/drone.py
+
+      - name: Run Python suspended payload experiment
+        if: matrix.python == 'y'
+        run: xmake run csim_python examples/python/suspended_payload.py
+
+      - name: Record a trajectory and verify OpenGL rendering
+        if: matrix.viewer == 'y'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          xvfb-run -a xmake run csim_python tests/viewer/python_viewer_test.py
+          xmake run csim_python examples/python/record_payload.py build/ci-flight.csv --duration 2
+          xvfb-run -a xmake run viewer --hidden --frames 121 --screenshot build/viewer-live.ppm
+          python3 tests/viewer/check_image.py build/viewer-live.ppm
+          xvfb-run -a xmake run viewer build/ci-flight.csv --hidden --frames 121 --screenshot build/viewer-replay.ppm
+          python3 tests/viewer/check_image.py build/viewer-replay.ppm

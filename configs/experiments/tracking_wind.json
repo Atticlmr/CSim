@@ -1,0 +1,194 @@
+{
+  "model": {
+    "gravity": 9.80665,
+    "timestep": 0.002,
+    "inertia_B": [
+      [
+        0.02,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.02,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.04
+      ]
+    ],
+    "drone_drag": {
+      "k1": 0.1,
+      "k2": 0.0,
+      "k0": 0.0,
+      "sign_mode": "exact",
+      "epsilon_v": 0.0
+    },
+    "wind": {
+      "velocity_W": [
+        2,
+        0,
+        0
+      ],
+      "reference_W": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "gust_amplitude_W": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "gust_frequency": 0.0,
+      "gust_phase": 0.0,
+      "gradient_W": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "initial_pose_WB": {
+      "position_W": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "q_WB": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "kind": "suspended_payload",
+    "drone_mass": 1.0,
+    "payload_mass": 0.2,
+    "length": 1.0,
+    "payload_drag": {
+      "k1": 0.02,
+      "k2": 0.01,
+      "k0": 0.001,
+      "sign_mode": "tanh",
+      "epsilon_v": 0.02
+    },
+    "integrator": "rk4",
+    "rtol": 1e-06,
+    "atol": 1e-09,
+    "max_substeps": 10000
+  },
+  "initial": {
+    "position_W": [
+      0,
+      0,
+      5
+    ],
+    "thrust": 11.76798,
+    "cable_direction_W": [
+      0,
+      0,
+      -1
+    ]
+  },
+  "experiment": {
+    "task": "tracking",
+    "duration": 2.0,
+    "outer_period": 0.01,
+    "swing_gain": 0.0,
+    "controller": {
+      "position_gain": 2.0,
+      "velocity_gain": 2.5,
+      "attitude_gain": 5.0,
+      "acceleration_limits": [
+        3.0,
+        3.0,
+        4.0
+      ],
+      "rate_limit": 3.0,
+      "minimum_thrust_ratio": 0.1
+    }
+  },
+  "control": {
+    "mode": "ctbr",
+    "allocation_mode": "rotor",
+    "allocation_weights": [
+      1.0,
+      5.0,
+      5.0,
+      2.0
+    ],
+    "rate_gain": [
+      16.0,
+      16.0,
+      8.0
+    ],
+    "controller_period": 0.004,
+    "command_delay": 0.004,
+    "time_constants": [
+      0.02,
+      0.02,
+      0.02,
+      0.02
+    ],
+    "gyroscopic_compensation": true,
+    "max_thrust": 30.0,
+    "max_torque": [
+      1.0,
+      1.0,
+      0.5
+    ],
+    "max_rate": [
+      3.0,
+      3.0,
+      3.0
+    ],
+    "rotor_positions_B": [
+      [
+        0.2,
+        0.2,
+        0.0
+      ],
+      [
+        -0.2,
+        0.2,
+        0.0
+      ],
+      [
+        -0.2,
+        -0.2,
+        0.0
+      ],
+      [
+        0.2,
+        -0.2,
+        0.0
+      ]
+    ],
+    "rotor_moment_ratios": [
+      0.015,
+      -0.015,
+      0.015,
+      -0.015
+    ],
+    "max_rotor_thrust": [
+      8.0,
+      8.0,
+      8.0,
+      8.0
+    ]
+  }
+}

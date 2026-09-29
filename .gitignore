@@ -63,3 +63,21 @@ vcpkg_installed/
 
 # test output & cache
 .cache/
+
+# Machine-specific editor settings and IntelliSense databases
+.vscode/
+
+# Python environments and generated artifacts
+__pycache__/
+*.py[cod]
+*.pyd
+.venv/
+venv/
+*.egg-info/
+dist/
+wheelhouse/
+.pytest_cache/
+runs/
+
+# Wavefront source meshes (not compiler object files)
+!examples/models/*.obj
