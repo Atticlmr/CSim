@@ -1,0 +1,78 @@
+name: Python package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Ubuntu / Python ${{ matrix.python }} / wheel
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v9
+        with:
+          version: "0.9.16"
+          python-version: ${{ matrix.python }}
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: "3.1.1"
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libtinyxml2-dev libglfw3-dev libgl1-mesa-dev libgl1-mesa-dri xvfb xauth
+
+      # uv build creates the sdist first, then builds the wheel FROM that sdist.
+      # This catches missing C++ headers, Lua scripts and build_info.py.
+      - name: Build source and binary distributions
+        run: uv build --out-dir dist
+
+      - name: Install wheel in a clean environment
+        run: |
+          uv venv .venv
+          uv pip install --python .venv/bin/python --no-index dist/*.whl
+          .venv/bin/python -I -c 'import csim, csim_experiments, sys; from pathlib import Path; assert Path(csim.__file__).is_relative_to(Path(sys.prefix)); assert Path(csim_experiments.__file__).is_relative_to(Path(sys.prefix)); print(csim.__file__)'
+
+      - name: Test installed physical API
+        run: |
+          .venv/bin/python -I -m unittest discover -s tests/python -v
+          .venv/bin/python -I examples/python/drone.py
+          .venv/bin/python -I examples/python/suspended_payload.py
+
+      - name: Test installed viewer
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: xvfb-run -a .venv/bin/python -I tests/viewer/python_viewer_test.py
+
+      - name: Check editable development install
+        run: |
+          uv pip install --python .venv/bin/python --reinstall -e .
+          .venv/bin/python -I -c 'import csim_experiments; print(csim_experiments.__file__)'
+          .venv/bin/python -I examples/python/drone.py
+          xvfb-run -a .venv/bin/python -I tests/viewer/python_viewer_test.py
+
+      # Native Linux wheels are test artifacts, not manylinux/PyPI releases.
+      - name: Save tested distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: csim-linux-python-${{ matrix.python }}
+          path: dist/*
+          if-no-files-found: error

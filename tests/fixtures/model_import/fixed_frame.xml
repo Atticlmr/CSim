@@ -1,0 +1,16 @@
+<mujoco model="fixed_frame">
+  <compiler angle="radian" inertiafromgeom="false"/>
+  <worldbody>
+    <body name="base">
+      <inertial pos="0.1 0 0" quat="0.7071067811865476 0 0 0.7071067811865476"
+                mass="2" diaginertia="0.02 0.03 0.04"/>
+      <geom name="base_box" type="box" size="0.2 0.1 0.05"
+            rgba="0.1 0.7 0.9 1" contype="0" conaffinity="0"/>
+      <body name="arm" pos="0.4 0 0.1" quat="0.7071067811865476 0 0 0.7071067811865476">
+        <inertial pos="0 0.1 0" mass="0.5" diaginertia="0.001 0.002 0.003"/>
+        <geom name="arm_cylinder" type="cylinder" pos="0.02 0 0" size="0.03 0.1"
+              rgba="0.1 0.7 0.9 1" contype="0" conaffinity="0"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

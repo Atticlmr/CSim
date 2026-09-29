@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=77", "wheel", "pybind11>=2.13,<4"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csim-drone"
+dynamic = ["version"]
+description = "C++ drone and suspended-payload simulation with a Python step API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering",
+]
+
+[tool.setuptools]
+packages = ["csim_viewer", "csim_experiments", "csim_control"]
+py-modules = []
+
+[tool.setuptools.package-dir]
+"" = "bindings/python"
+
+[tool.setuptools.package-data]
+csim_viewer = ["shaders/*.vert", "shaders/*.frag", ".libs/*"]
+
+# Include C++ inputs in uv's local wheel cache key, not just Python metadata.
+[tool.uv]
+cache-keys = [
+    {file = "pyproject.toml"},
+    {file = "setup.py"},
+    {file = "MANIFEST.in"},
+    {file = "xmake.lua"},
+    {file = "bindings/python/*.cpp"},
+    {file = "bindings/python/*.hpp"},
+    {file = "bindings/python/*.py"},
+    {file = "bindings/python/*.lua"},
+    {file = "include/csim/**/*.hpp"},
+    {file = "src/**/*.cpp"},
+    {file = "apps/viewer/*"},
+    {file = "bindings/python/csim_viewer/**/*"},
+    {file = "bindings/python/csim_experiments/**/*.py"},
+    {file = "bindings/python/csim_control/**/*.py"},
+    {env = "CSIM_BUILD_VIEWER"},
+]
