@@ -2,6 +2,7 @@
 
 #include <csim/simulation/drone.hpp>
 #include <csim/simulation/suspended_payload.hpp>
+#include <csim/simulation/rigid_payload.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -55,6 +56,35 @@ inline LinkSnapshot observeLink(const model::FixedLink& link, const SuspendedPay
     return observeLink(link, s.time, s.state.drone, s.physical.drone);
 }
 } // namespace detail
+
+inline std::vector<std::string> linkNames(const RigidPayloadModel& model) {
+    std::vector<std::string> names;
+    for (const auto& link:model.asset()->links) names.push_back("drone/"+link.name);
+    for (const auto& link:model.payloadAsset()->links) names.push_back("payload/"+link.name);
+    return names;
+}
+
+inline std::vector<LinkSnapshot> getLinkStates(const RigidPayloadModel& model,const RigidPayloadData& data) {
+    const auto snapshot=getState(model,data);
+    std::vector<LinkSnapshot> result;
+    auto append=[&](const model::RigidBodyAsset& asset,const dynamics::DroneState& state,
+                    const dynamics::DroneObservables& physical,const std::string& prefix) {
+        for (const auto& link:asset.links) {
+            auto observation=detail::observeLink(link,snapshot.time,state,physical);
+            observation.name=prefix+observation.name;
+            if (observation.parent) observation.parent=prefix+*observation.parent;
+            result.push_back(std::move(observation));
+        }
+    };
+    append(*model.asset(),snapshot.state.drone,snapshot.physical.drone,"drone/");
+    append(*model.payloadAsset(),snapshot.state.payload,snapshot.physical.payload,"payload/");
+    return result;
+}
+
+inline LinkSnapshot getLinkState(const RigidPayloadModel& model,const RigidPayloadData& data,const std::string& name) {
+    for (const auto& snapshot:getLinkStates(model,data)) if (snapshot.name==name) return snapshot;
+    throw std::out_of_range("Unknown fixed link: "+name);
+}
 
 template<class Model> std::vector<std::string> linkNames(const Model& model) {
     std::vector<std::string> names;

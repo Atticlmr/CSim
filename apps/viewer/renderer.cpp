@@ -173,11 +173,12 @@ void Renderer::render(const Camera& camera,const Display& scene,bool trails) {
     cylinder(solids,{0,0,0},{0,0,2},0.018,{0.35,0.6,1});
     const auto rotation=f.q_WB.toRotationMatrix();
     auto body=[&](Vector3 p) { return f.drone_position_W+rotation*p; };
-    if (scene.asset) {
-        for (const auto& g:scene.asset->visuals_B) {
-            const auto position=body(g.body_from_geometry.position);
-            const auto r=rotation*g.body_from_geometry.orientation.toRotationMatrix();
-            const Vector3 color=g.rgba ? Vector3{(*g.rgba)[0],(*g.rgba)[1],(*g.rgba)[2]} : cyan;
+    auto render_asset=[&](const model::RigidBodyAsset& asset,Vector3 origin,
+                          const math::Matrix3& orientation,Vector3 default_color) {
+        for (const auto& g:asset.visuals_B) {
+            const auto position=origin+orientation*g.body_from_geometry.position;
+            const auto r=orientation*g.body_from_geometry.orientation.toRotationMatrix();
+            const Vector3 color=g.rgba ? Vector3{(*g.rgba)[0],(*g.rgba)[1],(*g.rgba)[2]} : default_color;
             std::visit([&](const auto& shape) {
                 using T=std::decay_t<decltype(shape)>;
                 if constexpr (std::is_same_v<T,model::Box>) box(solids,position,shape.size*0.5,r,color);
@@ -197,6 +198,9 @@ void Renderer::render(const Camera& camera,const Display& scene,bool trails) {
                 }
             },g.shape);
         }
+    };
+    if (scene.asset && !scene.asset->visuals_B.empty()) {
+        render_asset(*scene.asset,f.drone_position_W,rotation,cyan);
     } else {
     box(solids,body({0,0,0}),{0.27,0.18,0.07},rotation,cyan);
     box(solids,body({0.27,0,0.015}),{0.05,0.13,0.055},rotation,{1,0.34,0.3});
@@ -211,8 +215,25 @@ void Renderer::render(const Camera& camera,const Display& scene,bool trails) {
     }
     }
     if (f.has_payload) {
-        cylinder(solids,f.drone_position_W,f.payload_position_W,0.009,gold,10);
-        sphere(solids,f.payload_position_W,0.13,gold);
+        const auto start=f.drone_attachment_W.value_or(f.drone_position_W);
+        const auto end=f.payload_attachment_W.value_or(f.payload_position_W);
+        if ((end-start).norm()>1e-12) {
+            if (f.cable_slack) {
+                for (int segment=0;segment<20;segment+=2)
+                    line(lines,start+(end-start)*(segment/20.),start+(end-start)*((segment+1)/20.),gold*.55);
+            } else cylinder(solids,start,end,0.009,gold,10);
+        }
+        if (f.rigid_payload) {
+            const auto orientation=f.q_WP.toRotationMatrix();
+            if (scene.payload_asset && !scene.payload_asset->visuals_B.empty())
+                render_asset(*scene.payload_asset,f.payload_position_W,orientation,gold);
+            else box(solids,f.payload_position_W,{.1,.075,.06},orientation,gold);
+            for (const auto& axis:{Vector3{.25,0,0},Vector3{0,.25,0},Vector3{0,0,.25}})
+                line(lines,f.payload_position_W,f.payload_position_W+orientation*axis,
+                    axis.x>0 ? Vector3{1,.3,.3} : axis.y>0 ? Vector3{.3,1,.3} : Vector3{.3,.5,1});
+        } else sphere(solids,f.payload_position_W,0.13,gold);
+        if (f.drone_attachment_W) sphere(solids,start,.022,white);
+        if (f.payload_attachment_W) sphere(solids,end,.022,white);
     }
     sphere(solids,f.drone_position_W,0.045,white);
     if (!scene.asset) for (int y:{-1,1}) {

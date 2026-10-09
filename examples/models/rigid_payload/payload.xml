@@ -1,0 +1,11 @@
+<mujoco model="offset_payload">
+  <compiler angle="radian" inertiafromgeom="false"/>
+  <worldbody>
+    <body name="base">
+      <freejoint/>
+      <inertial pos="-0.02 0 0" mass="0.5" diaginertia="0.01 0.015 0.02"/>
+      <geom type="box" pos="-0.02 0 0" size="0.1 0.075 0.06" contype="0" conaffinity="0"/>
+      <site name="cable_attachment" pos="0.08 0 0.1" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

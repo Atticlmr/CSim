@@ -243,7 +243,7 @@ model::ModelDescription mjcf(Parser& p,const E* root) {
     auto* base=p.one(world,"body",true);
     std::set<std::string> names,geom_names;
     std::function<void(const E*,std::optional<std::string>)> body=[&](const E* e,std::optional<std::string> parent) {
-        p.attributes(e,{"name","pos","quat","euler"}); p.children(e,{"inertial","geom","body","freejoint"});
+        p.attributes(e,{"name","pos","quat","euler"}); p.children(e,{"inertial","geom","body","freejoint","site"});
         model::BodyDescription b; b.name=p.attr(e,"name"); b.parent=parent; b.parent_from_body=mjPose(p,e,angle,sequence); b.source=p.source(e);
         if (!names.insert(b.name).second) p.fail(e,"Duplicate body name");
         if (auto* free=p.one(e,"freejoint")) {
@@ -281,6 +281,28 @@ model::ModelDescription mjcf(Parser& p,const E* root) {
             } else p.fail(g,"Unsupported geom type: "+type,ImportErrorCode::unsupported_feature);
             if (type!="mesh" && g->Attribute("mesh")) p.fail(g,"Primitive fitting to mesh is unsupported",ImportErrorCode::unsupported_feature);
             b.visuals.push_back(std::move(visual));
+        }
+        for (auto* site=e->FirstChildElement("site");site;site=site->NextSiblingElement("site")) {
+            p.attributes(site,{"name","pos","quat","euler","size","rgba","type","group"});
+            p.children(site,{});
+            if (site->Attribute("size")) {
+                std::istringstream values(p.attr(site,"size"));
+                double value; std::size_t count=0;
+                while (values>>value) {
+                    if (!std::isfinite(value)||value<=0) p.fail(site,"Invalid site size");
+                    ++count;
+                }
+                if (!values.eof() || (count!=1 && count!=3)) p.fail(site,"Site size requires 1 or 3 values");
+            }
+            if (site->Attribute("rgba")) (void)p.color(site);
+            const auto type=p.attr(site,"type","sphere");
+            if (type!="sphere" && type!="box" && type!="ellipsoid" && type!="capsule" && type!="cylinder")
+                p.fail(site,"Unsupported site type");
+            if (site->Attribute("group")) {
+                const auto group=p.number(site,"group");
+                if (group<0 || group>5 || std::floor(group)!=group) p.fail(site,"Invalid site group");
+            }
+            d.attachments.push_back({p.attr(site,"name"),b.name,mjPose(p,site,angle,sequence),p.source(site)});
         }
         const auto name=b.name; d.bodies.push_back(std::move(b));
         if (d.bodies.size()>256) p.fail(e,"Too many bodies");

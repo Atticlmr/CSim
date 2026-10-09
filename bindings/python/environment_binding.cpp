@@ -1,6 +1,7 @@
 #include "environment_binding.hpp"
 #include <csim/simulation/drone.hpp>
 #include <csim/simulation/suspended_payload.hpp>
+#include <csim/simulation/rigid_payload.hpp>
 namespace py=pybind11;
 using Triple=std::array<double,3>;
 using Tensor=std::array<Triple,3>;
@@ -39,12 +40,31 @@ template<class Model> py::dict config(const Model& m,const csim::dynamics::Drone
     return d;
 }
 void bindModelConfig(py::module_& m) {
+    m.def("get_config",[](const csim::simulation::RigidPayloadModel& model) {
+        auto d=config(model,model.physics().drone()); d["kind"]="rigid_payload";
+        d["drone_mass"]=model.physics().drone().mass(); d["payload_mass"]=model.physics().payload().mass();
+        Tensor tensor{};
+        for (std::size_t row=0;row<3;++row) for (std::size_t column=0;column<3;++column)
+            tensor[row][column]=model.physics().payload().inertia()(row,column);
+        d["payload_inertia_P"]=tensor;
+        d["drone_attachment_B"]=csim::binding::triple(model.physics().droneAttachment());
+        d["payload_attachment_P"]=csim::binding::triple(model.physics().payloadAttachment());
+        d["length"]=model.physics().length(); d["cable_mode"]=model.cable().mode;
+        d["initial_direction_W"]=csim::binding::triple(model.cable().initial_direction_W);
+        const auto pose=model.payloadAsset()->initial_pose_WB;
+        d["initial_payload_q_WP"]=std::array<double,4>{pose.orientation.w,pose.orientation.x,pose.orientation.y,pose.orientation.z};
+        d["event_max_step"]=model.cable().events.max_step;
+        d["event_tolerance"]=model.cable().events.time_tolerance;
+        d["max_events"]=model.cable().events.max_events;
+        d["payload_drag"]=csim::binding::dragConfig(model.physics().payload().drag()); return d;
+    },py::arg("model"));
     m.def("get_config",[](const csim::simulation::DroneModel& model) {
         auto d=config(model,model.physics()); d["kind"]="drone"; d["mass"]=model.physics().mass(); return d;
     },py::arg("model"),"Copy all physical and wind parameters for reproducible experiments.");
     m.def("get_config",[](const csim::simulation::SuspendedPayloadModel& model) {
         auto d=config(model,model.physics().drone()); d["kind"]="suspended_payload";
         d["drone_mass"]=model.physics().drone().mass(); d["payload_mass"]=model.physics().payloadMass();
-        d["length"]=model.physics().length(); d["cable_mode"]=model.cableMode(); d["payload_drag"]=csim::binding::dragConfig(model.physics().payloadDrag()); return d;
+        d["length"]=model.physics().length(); d["cable_mode"]=model.cableMode();
+        d["event_max_step"]=model.events().max_step; d["event_tolerance"]=model.events().time_tolerance; d["max_events"]=model.events().max_events; d["payload_drag"]=csim::binding::dragConfig(model.physics().payloadDrag()); return d;
     },py::arg("model"));
 }

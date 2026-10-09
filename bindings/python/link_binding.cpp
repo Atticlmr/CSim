@@ -41,4 +41,5 @@ template<class Model, class Data> void bind(py::module_& module) {
 void bindLinkStates(py::module_& module) {
     bind<csim::simulation::DroneModel, csim::simulation::DroneData>(module);
     bind<csim::simulation::SuspendedPayloadModel, csim::simulation::SuspendedPayloadData>(module);
+    bind<csim::simulation::RigidPayloadModel, csim::simulation::RigidPayloadData>(module);
 }

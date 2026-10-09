@@ -9,6 +9,7 @@ struct Display {
     const Frame& frame;
     const std::deque<Frame>& trail;
     const model::RigidBodyAsset* asset=nullptr;
+    const model::RigidBodyAsset* payload_asset=nullptr;
 };
 inline math::Vector3 centre(const Frame& f) {
     return f.has_payload ? (f.drone_position_W+f.payload_position_W)*0.5 : f.drone_position_W;

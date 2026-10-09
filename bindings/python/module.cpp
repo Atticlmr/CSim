@@ -3,6 +3,7 @@
 #include <csim/simulation/drone.hpp>
 #include <csim/simulation/suspended_payload.hpp>
 #include <csim/simulation/link.hpp>
+#include <csim/simulation/wrench_step.hpp>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -13,6 +14,9 @@
 namespace py = pybind11;
 void bindModelLoading(py::module_&);
 void bindLinkStates(py::module_&);
+void bindDroneBatch(py::module_&);
+void bindRigidPayload(py::module_&);
+void bindRigidPayloadBatch(py::module_&);
 using csim::simulation::PendulumModel;
 using csim::simulation::PendulumData;
 using csim::simulation::DroneModel;
@@ -51,6 +55,7 @@ template<class Model> csim::dynamics::DroneState initialState(const Model& model
 PYBIND11_MODULE(csim, module) {
     module.doc() = "CSim physical simulation interface: pendulum, rigid-body drone and suspended payload.";
     bindEnvironment(module);
+    bindRigidPayloadBatch(module);
     // Mathematical types, derivatives and integrators stay inside the C++ core.
     py::register_local_exception<csim::dynamics::PendulumDomainError>(
         module, "PendulumDomainError", PyExc_ValueError);
@@ -131,6 +136,9 @@ PYBIND11_MODULE(csim, module) {
        py::arg("q_WB") = py::none(), py::arg("angular_velocity_B") = Triple{});
     module.def("step", py::overload_cast<const DroneModel&, DroneData&>(&csim::simulation::step),
                py::arg("model"), py::arg("data"), "Advance one physical timestep under the current actual thrust and body torque.");
+    module.def("step", [](const DroneModel& model, DroneData& data, double thrust, const Triple& torque) {
+        csim::simulation::stepWithControl(model,data,{thrust,vector(torque)});
+    }, py::arg("model"), py::arg("data"), py::arg("thrust"), py::arg("torque_B")=Triple{});
     module.def("set_control", [](const DroneModel& model, DroneData& data, double thrust, const Triple& torque) {
         csim::simulation::setControl(model, data, {thrust, vector(torque)});
     }, py::arg("model"), py::arg("data"), py::arg("thrust"), py::arg("torque_B") = Triple{},
@@ -166,16 +174,16 @@ PYBIND11_MODULE(csim, module) {
     py::class_<SuspendedPayloadModel, std::shared_ptr<SuspendedPayloadModel>>(module, "SuspendedPayloadModel")
         .def(py::init([](double drone_mass, double payload_mass, double length,
                          const Inertia& inertia, double gravity, double timestep,  const csim::dynamics::DragConfig& drone_drag,
-                         const csim::dynamics::DragConfig& payload_drag,const csim::dynamics::WindField& wind, const std::string& integrator, double rtol, double atol, std::size_t max_substeps, const std::string& cable_mode) {
+                         const csim::dynamics::DragConfig& payload_drag,const csim::dynamics::WindField& wind, const std::string& integrator, double rtol, double atol, std::size_t max_substeps, const std::string& cable_mode, double event_max_step, double event_tolerance, std::size_t max_events) {
             csim::math::Matrix3 matrix;
             for (std::size_t i = 0; i < 3; ++i)
                 for (std::size_t j = 0; j < 3; ++j) matrix(i,j) = inertia[i][j];
-            return std::make_shared<SuspendedPayloadModel>(drone_mass, payload_mass, length, matrix, gravity, timestep, nullptr, drone_drag, payload_drag, wind, csim::simulation::IntegratorSettings{integrator,rtol,atol,max_substeps},cable_mode);
+            return std::make_shared<SuspendedPayloadModel>(drone_mass, payload_mass, length, matrix, gravity, timestep, nullptr, drone_drag, payload_drag, wind, csim::simulation::IntegratorSettings{integrator,rtol,atol,max_substeps},cable_mode,csim::simulation::CableEventSettings{event_max_step,event_tolerance,max_events});
         }), py::arg("drone_mass") = 1.0, py::arg("payload_mass") = 0.2, py::arg("length") = 1.0,
             py::arg("inertia_B") = inertiaComponents(csim::dynamics::Drone::defaultInertia()),
             py::arg("gravity") = 9.80665, py::arg("timestep") = 0.001,
             py::arg("drone_drag")=csim::dynamics::DragConfig{},py::arg("payload_drag")=csim::dynamics::DragConfig{},
-            py::arg("wind")=csim::dynamics::WindField{},py::arg("integrator")="rk4",py::arg("rtol")=1e-6,py::arg("atol")=1e-9,py::arg("max_substeps")=10000,py::arg("cable_mode")="taut")
+            py::arg("wind")=csim::dynamics::WindField{},py::arg("integrator")="rk4",py::arg("rtol")=1e-6,py::arg("atol")=1e-9,py::arg("max_substeps")=10000,py::arg("cable_mode")="taut",py::arg("event_max_step")=0.005,py::arg("event_tolerance")=1e-10,py::arg("max_events")=64)
         .def_property_readonly("drone_mass", [](const SuspendedPayloadModel& m) { return m.physics().drone().mass(); })
         .def_property_readonly("payload_mass", [](const SuspendedPayloadModel& m) { return m.physics().payloadMass(); })
         .def_property_readonly("length", [](const SuspendedPayloadModel& m) { return m.physics().length(); })
@@ -186,6 +194,9 @@ PYBIND11_MODULE(csim, module) {
         .def_property_readonly("rtol", [](const SuspendedPayloadModel& m) { return m.integration().rtol; })
         .def_property_readonly("atol", [](const SuspendedPayloadModel& m) { return m.integration().atol; })
         .def_property_readonly("max_substeps", [](const SuspendedPayloadModel& m) { return m.integration().max_substeps; })
+        .def_property_readonly("event_max_step", [](const SuspendedPayloadModel& m) { return m.events().max_step; })
+        .def_property_readonly("event_tolerance", [](const SuspendedPayloadModel& m) { return m.events().time_tolerance; })
+        .def_property_readonly("max_events", [](const SuspendedPayloadModel& m) { return m.events().max_events; })
         .def_property_readonly("cable_mode", &SuspendedPayloadModel::cableMode)
         .def_property_readonly("link_names", &csim::simulation::linkNames<SuspendedPayloadModel>);
     py::class_<SuspendedPayloadData>(module, "SuspendedPayloadData")
@@ -210,7 +221,10 @@ PYBIND11_MODULE(csim, module) {
        py::arg("payload_position_W") = py::none(), py::arg("payload_velocity_W") = Triple{}, py::arg("cable_mode") = "taut",
        "Create a taut state, or a slack state with cable_mode=hybrid and explicit payload position.");
     module.def("step", py::overload_cast<const SuspendedPayloadModel&, SuspendedPayloadData&>(&csim::simulation::step),
-               py::arg("model"), py::arg("data"), "Advance one coupled timestep; fail atomically at nonpositive tension.");
+               py::arg("model"), py::arg("data"), "Advance one physical timestep, locating hybrid cable events internally; commit only on success.");
+    module.def("step", [](const SuspendedPayloadModel& model, SuspendedPayloadData& data, double thrust, const Triple& torque) {
+        csim::simulation::stepWithControl(model,data,{thrust,vector(torque)});
+    }, py::arg("model"), py::arg("data"), py::arg("thrust"), py::arg("torque_B")=Triple{});
     module.def("set_control", [](const SuspendedPayloadModel& model, SuspendedPayloadData& data,
                                  double thrust, const Triple& torque) {
         csim::simulation::setControl(model,data,{thrust,vector(torque)});
@@ -256,6 +270,19 @@ PYBIND11_MODULE(csim, module) {
         result["cable_distance"] = s.physical.cable_distance;
         result["cable_radial_velocity"] = s.physical.cable_radial_velocity;
         result["cable_impulse_W"] = components(s.physical.cable_impulse_W);
+        py::list events;
+        double loss=0;
+        for (const auto& e:s.cable_events) {
+            py::dict event;
+            event["type"]=e.type; event["time"]=e.time;
+            event["impulse_W"]=components(e.impulse_W); event["energy_loss"]=e.energy_loss;
+            event["radial_velocity_before"]=e.radial_velocity_before;
+            event["radial_velocity_after"]=e.radial_velocity_after;
+            event["mode_after"]=e.slack_after ? "slack" : "taut";
+            events.append(event); loss+=e.energy_loss;
+        }
+        result["cable_events"]=events;
+        result["impact_energy_loss"]=loss;
         py::dict control;
         control["thrust"] = s.control.thrust;
         control["torque_B"] = components(s.control.torque_B);
@@ -265,7 +292,9 @@ PYBIND11_MODULE(csim, module) {
         return result;
     }, py::arg("model"), py::arg("data"), "Read both bodies, cable geometry and forces as an independent snapshot.");
     bindModelLoading(module);
+    bindRigidPayload(module);
     bindLinkStates(module);
     bindModelConfig(module);
+    bindDroneBatch(module);
 
 }

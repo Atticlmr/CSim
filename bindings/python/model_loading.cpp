@@ -11,7 +11,7 @@ void bindModelLoading(py::module_& module) {
     module.def("load_model", [](const std::string& path, std::string format, bool free_base,
              const std::array<double,4>& q, const std::map<std::string,std::string>& packages,
              double gravity,double timestep,std::optional<double> payload_mass,double length, const csim::dynamics::DragConfig& drone_drag,
-             const csim::dynamics::DragConfig& payload_drag,const csim::dynamics::WindField& wind, const std::string& integrator, double rtol, double atol, std::size_t max_substeps, const std::string& cable_mode) -> py::object {
+             const csim::dynamics::DragConfig& payload_drag,const csim::dynamics::WindField& wind, const std::string& integrator, double rtol, double atol, std::size_t max_substeps, const std::string& cable_mode, double event_max_step, double event_tolerance, std::size_t max_events) -> py::object {
         if (!payload_mass&&payload_drag.enabled()) throw std::invalid_argument("payload_drag requires payload_mass");
         if (format=="auto") format=std::filesystem::path(path).extension()==".urdf" ? "urdf" : "mjcf";
         csim::io::ImportOptions options;
@@ -34,13 +34,13 @@ void bindModelLoading(py::module_& module) {
             break;
         }
         if (payload_mass) return py::cast(std::make_shared<csim::simulation::SuspendedPayloadModel>(
-            asset->mass,*payload_mass,length,asset->inertia_B,gravity,timestep,asset,drone_drag,payload_drag,wind,csim::simulation::IntegratorSettings{integrator,rtol,atol,max_substeps},cable_mode));
+            asset->mass,*payload_mass,length,asset->inertia_B,gravity,timestep,asset,drone_drag,payload_drag,wind,csim::simulation::IntegratorSettings{integrator,rtol,atol,max_substeps},cable_mode,csim::simulation::CableEventSettings{event_max_step,event_tolerance,max_events}));
         return py::cast(std::make_shared<csim::simulation::DroneModel>(asset->mass,asset->inertia_B,gravity,timestep,asset,drone_drag,wind,csim::simulation::IntegratorSettings{integrator,rtol,atol,max_substeps}));
     },py::arg("path"),py::kw_only(),py::arg("format")="auto",py::arg("free_base")=false,
       py::arg("root_to_body")=std::array<double,4>{1,0,0,0},
       py::arg("package_roots")=std::map<std::string,std::string>{},py::arg("gravity")=9.80665,
       py::arg("timestep")=0.001,py::arg("payload_mass")=py::none(),py::arg("length")=1.0,
       py::arg("drone_drag")=csim::dynamics::DragConfig{},py::arg("payload_drag")=csim::dynamics::DragConfig{},
-      py::arg("wind")=csim::dynamics::WindField{},py::arg("integrator")="rk4",py::arg("rtol")=1e-6,py::arg("atol")=1e-9,py::arg("max_substeps")=10000,py::arg("cable_mode")="taut",
+      py::arg("wind")=csim::dynamics::WindField{},py::arg("integrator")="rk4",py::arg("rtol")=1e-6,py::arg("atol")=1e-9,py::arg("max_substeps")=10000,py::arg("cable_mode")="taut",py::arg("event_max_step")=0.005,py::arg("event_tolerance")=1e-10,py::arg("max_events")=64,
       "Load a validated fixed assembly as one free drone; optional CoM-attached point payload. SI units, Z-up source world, root_to_body is wxyz R-to-FLU rotation.");
 }

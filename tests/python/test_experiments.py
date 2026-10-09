@@ -12,6 +12,40 @@ from csim_experiments.recording import read_json, write_json
 
 
 class ExperimentTests(unittest.TestCase):
+    def test_rigid_config_recording_and_exact_replay_without_source_files(self):
+        root=Path(__file__).resolve().parents[2]/'examples/models/rigid_payload'
+        for extension in ('json','urdf','xml'):
+            with self.subTest(format=extension):
+                model=csim.load_suspended_model(str(root/f'drone.{extension}'),str(root/'cable.json'),
+                    str(root/f'payload.{extension}'),timestep=.002,drone_drag=csim.DragConfig(k1=.02),
+                    payload_drag=csim.DragConfig(k2=.01),wind=csim.WindField(velocity_W=[.1,0,0]))
+                physical=csim.get_config(model)
+                rebuilt=model_from_config(physical)
+                self.assertEqual(csim.get_config(rebuilt),physical)
+                initial={'thrust':15.,'position_W':[0,0,5],'payload_q_WP':[.98,.1,.1,.1]}
+                first=csim.make_data(model,**initial)
+                second=csim.make_data(rebuilt,**initial)
+                for _ in range(5):
+                    csim.step(model,first); csim.step(rebuilt,second)
+                    self.assertEqual(csim.get_state(model,first),csim.get_state(rebuilt,second))
+                config=default_config('swing')
+                config['model']=physical
+                config['initial']=initial
+                config['experiment']['duration']=.02
+                config['control'].update(controller_period=0.,command_delay=0.,time_constants=[0.]*4)
+                with tempfile.TemporaryDirectory() as directory:
+                    output=Path(directory)/'run'
+                    result=run_flight(config,output,model=model)
+                    verified=replay(output)
+                    self.assertEqual(verified['verified_states'],11)
+                    self.assertEqual(verified['state'],result['state'])
+                    self.assertIn('payload_q_WP',result['state'])
+                    self.assertIn('drone_attachment_position_W',result['state'])
+        invalid=copy.deepcopy(physical); invalid['max_substeps']=1.5
+        with self.assertRaises(ValueError): model_from_config(invalid)
+        invalid=copy.deepcopy(physical); invalid['payload_attachment_P'][0]=math.nan
+        with self.assertRaises(ValueError): model_from_config(invalid)
+
     def test_physical_configuration_roundtrip_and_independent_copy(self):
         for payload in (False,True):
             config=default_config('tracking',rotors=True,payload=payload)

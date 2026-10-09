@@ -2,6 +2,7 @@
 
 #include <csim/dynamics/pendulum.hpp>
 #include <csim/simulation/integration.hpp>
+#include <csim/numerics/rattle.hpp>
 
 #include <memory>
 #include <utility>
@@ -14,7 +15,7 @@ public:
     PendulumModel(double length = 1, double mass = 1, double gravity = 9.80665,
                   double timestep = 0.001, math::Vector3 pivot_W = {}, IntegratorSettings integration = {})
         : physics_(length, mass, gravity, pivot_W), timestep_(timestep), integration_(std::move(integration)) {
-        integration_.validate(true);
+        integration_.validate(true,false,true);
         if (!std::isfinite(timestep_) || timestep_ <= 0) {
             throw std::invalid_argument("Simulation timestep must be finite and positive");
         }
@@ -74,6 +75,21 @@ inline void step(const PendulumModel& model, PendulumData& data) {
     numerics::detail::validateExplicitTime(data.time_,model.timestep());
     const auto& method=model.integration().method;
     const auto candidate = [&]() {
+        if (method=="rattle") {
+            const double length=model.physics().length(),mass=model.physics().mass();
+            const double angle=data.state_.angle,rate=data.state_.angular_velocity;
+            using Vector=math::Matrix<2,1>;
+            const Vector position{length*std::sin(angle),-length*std::cos(angle)};
+            const Vector momentum{mass*length*rate*std::cos(angle),mass*length*rate*std::sin(angle)};
+            const auto result=numerics::Rattle<2>(Vector{1/mass,1/mass}).step(data.time_,position,momentum,model.timestep(),
+                [&](double,const Vector&) { return Vector{0,-mass*model.physics().gravity()}; },
+                [&](const Vector& value) { return math::Matrix<1,1>{.5*(value(0,0)*value(0,0)+value(1,0)*value(1,0)-length*length)}; },
+                [&](const Vector& value) { return math::Matrix<1,2>{value(0,0),value(1,0)}; });
+            const double next=std::atan2(result.first(0,0),-result.first(1,0));
+            const dynamics::PendulumState state{angle+std::remainder(next-angle,2*std::acos(-1.)),
+                (result.first(0,0)*result.second(1,0)-result.first(1,0)*result.second(0,0))/(mass*length*length)};
+            (void)model.physics().observe(state); return state;
+        }
         if (method=="symplectic_euler" || method=="velocity_verlet") {
             auto acceleration=[&](double angle) { return model.physics().derivative({angle,0}).angular_velocity; };
             const auto result=method=="symplectic_euler"

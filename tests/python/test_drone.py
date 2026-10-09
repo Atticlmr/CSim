@@ -154,8 +154,9 @@ class DroneTests(unittest.TestCase):
 
     def test_only_physical_api_is_public(self):
         self.assertEqual({name for name in dir(csim) if not name.startswith("_")}, {
-            "DroneModel", "DroneData", "PendulumModel", "PendulumData", "PendulumDomainError",
+            "DroneModel", "DroneData", "DroneBatch", "PendulumModel", "PendulumData", "PendulumDomainError",
             "SuspendedPayloadModel", "SuspendedPayloadData", "CableDomainError",
+            "RigidPayloadModel", "RigidPayloadData", "RigidPayloadBatch", "load_suspended_model",
             "get_link_state", "get_link_states",
             "DragConfig", "WindField", "get_config", "load_model", "make_data", "step", "set_control", "get_state", "reset",
         })

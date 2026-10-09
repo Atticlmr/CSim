@@ -1,0 +1,7 @@
+{
+  "name": "offset_payload",
+  "mass": 0.5,
+  "inertia": [[0.01, 0.0, 0.0], [0.0, 0.015, 0.0], [0.0, 0.0, 0.02]],
+  "center_of_mass": [-0.02, 0.0, 0.0],
+  "cable_attachment": [0.08, 0.0, 0.1]
+}

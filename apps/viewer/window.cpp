@@ -63,7 +63,8 @@ void Window::home() {
     camera_.reset(centre(frame_)-math::Vector3{0,0,1.3},frame_.has_payload ?
         std::max(6.0,7+3*(frame_.drone_position_W-frame_.payload_position_W).norm()) : 8.0);
 }
-void Window::sync(const Frame& candidate, const model::RigidBodyAsset* asset) {
+void Window::sync(const Frame& candidate, const model::RigidBodyAsset* asset,
+                  const model::RigidBodyAsset* payload_asset) {
     checkThread();
     if (!window_) throw std::runtime_error("Viewer is closed");
     if (!std::isfinite(candidate.time) || candidate.time<0 || !candidate.drone_position_W.isFinite()
@@ -74,8 +75,12 @@ void Window::sync(const Frame& candidate, const model::RigidBodyAsset* asset) {
         || candidate.payload_position_W.norm()>10000 || !std::isfinite(candidate.tension)
         || (!candidate.cable_slack && candidate.tension<=0)))
         throw std::invalid_argument("Invalid payload display state");
+    const auto payload_orientation=candidate.q_WP.normalized();
+    for (const auto& attachment:{candidate.drone_attachment_W,candidate.payload_attachment_W})
+        if (attachment && (!attachment->isFinite() || attachment->norm()>10000))
+            throw std::invalid_argument("Invalid attachment display state");
     if (first_ || candidate.time<frame_.time) trail_.clear();
-    frame_=candidate; frame_.q_WB=orientation;
+    frame_=candidate; frame_.q_WB=orientation; frame_.q_WP=payload_orientation;
     if (trail_.empty() || frame_.time-trail_.back().time>=0.02-1e-12) {
         trail_.push_back(frame_); if (trail_.size()>1500) trail_.pop_front();
     }
@@ -97,7 +102,7 @@ void Window::sync(const Frame& candidate, const model::RigidBodyAsset* asset) {
     home_pressed_=follow_pressed_=trails_pressed_=false;
     if (following_) camera_.setTarget(centre(frame_));
     if (width && height) {
-        renderer_->render(camera_,{frame_,trail_,asset},trails_);
+        renderer_->render(camera_,{frame_,trail_,asset,payload_asset},trails_);
         glfwSwapBuffers(window_);
     }
 }

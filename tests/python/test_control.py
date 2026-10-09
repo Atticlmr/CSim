@@ -1,10 +1,42 @@
 import math
+from pathlib import Path
 import unittest
 import csim
 from csim_control import ControlConfig, ControlLoop
 
 
 class ControlTests(unittest.TestCase):
+    def test_hybrid_failed_step_restores_physics_events_and_pending_commands(self):
+        root=Path(__file__).resolve().parents[2]/'examples/models/rigid_payload'
+        models=[csim.SuspendedPayloadModel(cable_mode='hybrid',timestep=.02,max_substeps=1),
+            csim.load_suspended_model(str(root/'drone.json'),str(root/'cable.json'),str(root/'payload.json'),
+                                      timestep=.02,max_substeps=1)]
+        for model in models:
+            with self.subTest(model=type(model).__name__):
+                data=csim.make_data(model,thrust=15.)
+                loop=ControlLoop(model,data)
+                loop.set_control(0.)
+                before=loop.get_state()
+                self.assertEqual(before['mode'],'taut')
+                for _ in range(2):
+                    with self.assertRaises(RuntimeError): loop.step()
+                    self.assertEqual(loop.get_state(),before)
+                with self.assertRaises(ValueError): csim.step(model,data,thrust=-1.)
+                self.assertEqual(loop.get_state(),before)
+
+    def test_atomic_wrench_step_keeps_data_identity_and_successful_release(self):
+        model=csim.SuspendedPayloadModel(cable_mode='hybrid')
+        data=csim.make_data(model,thrust=15.)
+        loop=ControlLoop(model,data)
+        loop.set_control(0.)
+        loop.step()
+        self.assertIs(loop.data,data)
+        state=csim.get_state(model,data)
+        self.assertEqual(state['mode'],'slack')
+        self.assertEqual(state['time'],model.timestep)
+        self.assertEqual(state['control']['thrust'],0.)
+        self.assertEqual(loop.get_state()['actuation']['pending_commands'],0)
+
     def test_native_engine_has_only_actual_inputs(self):
         for name in ('ControlConfig','set_ctbr','set_rotor_thrusts'):
             self.assertFalse(hasattr(csim,name))

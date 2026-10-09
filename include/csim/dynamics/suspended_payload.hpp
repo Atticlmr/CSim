@@ -144,7 +144,12 @@ public:
                                      bool enforce_tension=true) const {
         auto state=input;
         if (!state.isFinite()) throw std::invalid_argument("Coupled state must be finite");
-        if (state.slack) state=projectedState(state,length_);
+        if (state.slack) {
+            state=projectedState(state,length_);
+            // As in standalone flight, q-dot uses the raw RK stage quaternion;
+            // normalization belongs to the accepted state and force rotation.
+            state.drone.q_WB=input.drone.q_WB;
+        }
         else {
             state.cable_direction_W=state.cable_direction_W.normalized();
             state.cable_angular_velocity_W-=state.cable_direction_W

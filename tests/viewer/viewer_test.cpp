@@ -58,6 +58,22 @@ void csvContract() {
     throws<std::invalid_argument>([]{ recording("0,0,0,5,1,0,0,0,0,0,4,2\n0,0,0,5,1,0,0,0,0,0,4,2\n"); });
     throws<std::invalid_argument>([]{ recording("0,0,0,5,1,0,0,0,0,0,4,2\n1,0,0,5,1,0,0,0,0,0,3,2\n"); });
     std::istringstream bad("time,x,y\n"); throws<std::invalid_argument>([&]{ readTrajectory(bad); });
+    const auto prefix=std::string(rigidTrajectoryHeader)+"\n";
+    const std::string taut="0,0,0,5,1,0,0,0,.2,0,3.8,2,2,0,0,0,.1,0,4.9,.1,0,3.9,0,1\n";
+    const std::string slack=".1,0,0,5,1,0,0,0,.2,0,4.1,0,1,0,0,0,.1,0,4.9,.1,0,4.2,1,1\n";
+    std::istringstream rigid_input(prefix+taut+slack);
+    const auto rigid=readTrajectory(rigid_input);
+    check(rigid.size()==2 && rigid[0].rigid_payload && rigid[1].cable_slack,"rigid CSV modes lost");
+    near(rigid[0].q_WP.norm(),1);
+    near(*rigid[0].drone_attachment_W,{.1,0,4.9});
+    near(*rigid[1].payload_attachment_W,{.1,0,4.2});
+    Scene replay(rigid); replay.singleStep(); check(replay.frame().cable_slack,"replay dropped slack flag");
+    for (const auto& suffix:{".5,1\n","nan,1\n","1,0\n","1,2\n"}) {
+        std::istringstream invalid(prefix+taut+".1,0,0,5,1,0,0,0,.2,0,4.1,0,1,0,0,0,.1,0,4.9,.1,0,4.2,"+suffix);
+        throws<std::invalid_argument>([&]{ readTrajectory(invalid); });
+    }
+    std::istringstream stretched(prefix+"0,0,0,5,1,0,0,0,0,0,3,0,1,0,0,0,0,0,5,0,0,3,1,1\n");
+    throws<std::invalid_argument>([&]{ readTrajectory(stretched); });
 }
 void playbackControls() {
     Scene scene(recording("3,0,0,5,1,0,0,0,0,0,4,2\n3.1,1,0,5,1,0,0,0,1,0,4,3\n3.3,2,0,5,1,0,0,0,2,0,4,4\n"));

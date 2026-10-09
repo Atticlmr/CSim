@@ -9,7 +9,9 @@ from .flight_control import ctbr, reference
 from .recording import Recording, restore
 
 def model_from_config(configuration):
-    config=restore(deepcopy(configuration)); kind=config.pop('kind')
+    config=restore(deepcopy(configuration))
+    if config['kind']=='rigid_payload': return csim.RigidPayloadModel.from_config(config)
+    kind=config.pop('kind')
     config.pop('initial_pose_WB',None)
     if kind not in ('drone','suspended_payload'): raise ValueError('Unsupported experiment model kind')
     config['wind']=csim.WindField(**config.get('wind',{}))
@@ -118,7 +120,7 @@ def run_flight(configuration,output_dir,*,headless=True,hidden=False,render_ever
     control_config=ControlConfig(**config['control'])
     config['control']=control_config.to_dict()
     if control_config.mode!='ctbr': raise ValueError('Flight example requires Python CTBR control')
-    payload=isinstance(model,csim.SuspendedPayloadModel)
+    payload=isinstance(model,(csim.SuspendedPayloadModel,csim.RigidPayloadModel))
     if task=='swing' and not payload: raise ValueError('Swing experiment requires a payload')
     count=ticks(duration,model.timestep,'duration'); outer=ticks(period,model.timestep,'outer_period')
     data=initial_data(model,config['model'],config['initial'])

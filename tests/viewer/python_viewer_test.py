@@ -79,6 +79,37 @@ class ViewerTests(unittest.TestCase):
                     results.append(csim.get_state(model,data))
             self.assertEqual(results[0],results[1]); self.assertEqual(results[0],results[2])
 
+    def test_rigid_payload_geometry_and_render_independence(self):
+        root = Path(__file__).resolve().parents[2] / 'examples/models/rigid_payload'
+        images = []
+        for extension in ('urdf', 'xml'):
+            model = csim.load_suspended_model(str(root/f'drone.{extension}'), str(root/'cable.json'), str(root/f'payload.{extension}'))
+            data = csim.make_data(model, thrust=15, position_W=[0, 0, 5])
+            reference = csim.make_data(model, thrust=15, position_W=[0, 0, 5])
+            with Viewer(model, width=800, height=600, hidden=True) as viewer:
+                initial = csim.get_state(model, data)
+                viewer.sync(data)
+                self.assertEqual(initial, csim.get_state(model, data))
+                for index in range(100):
+                    csim.step(model, data)
+                    csim.step(model, reference)
+                    if index % 7 == 0:
+                        viewer.sync(data)
+                self.assertEqual(csim.get_state(model, data), csim.get_state(model, reference))
+                viewer.sync(data)
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory)/'frame.ppm'
+                    viewer.screenshot(path)
+                    images.append(path.read_bytes())
+                    before = images[-1]
+                    csim.reset(model, data, thrust=15, position_W=[0, 0, 5], payload_q_WP=[math.sqrt(.5), 0, 0, math.sqrt(.5)])
+                    viewer.sync(data)
+                    viewer.screenshot(path)
+                    self.assertNotEqual(before, path.read_bytes())
+                    csim.reset(model, data, mode='slack', position_W=[0, 0, 5])
+                    viewer.sync(data)
+        self.assertEqual(images[0], images[1])
+
     def test_identity_lifetime_and_thread_rules(self):
         model = csim.DroneModel()
         data = csim.make_data(model)

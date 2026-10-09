@@ -96,7 +96,7 @@ class ControlLoop:
         self._period=_ticks(self.config.controller_period,model.timestep,True)
         self._delay=_ticks(self.config.command_delay,model.timestep)
         state=csim.get_state(model,data)
-        if not isinstance(model,(csim.DroneModel,csim.SuspendedPayloadModel)): raise ValueError('Expected a drone model')
+        if not isinstance(model,(csim.DroneModel,csim.SuspendedPayloadModel,csim.RigidPayloadModel)): raise ValueError('Expected a drone model')
         self._matrix=self.config.matrix()
         actual=_channels(state['control']); c=self.config
         if c.mode!='rotor_thrust' and any(abs(x)>u for x,u in zip(actual,[c.max_thrust,*c.max_torque])):
@@ -201,13 +201,7 @@ class ControlLoop:
         s['applied']=_wrench(applied); s['endpoint']=_wrench(endpoint)
         if c.rotors: s['rotor_thrusts']=actual
         state['actual']=actual; s['tick']+=1; state['time']+=dt
-        # Native step is atomic. Restore the previous input if it rejects a step.
-        try:
-            csim.set_control(self.model,self.data,**s['applied'])
-            csim.step(self.model,self.data)
-        except Exception:
-            csim.set_control(self.model,self.data,**physical['control'])
-            raise
+        csim.step(self.model,self.data,**s['applied'])
         self._state=state
 
     def reset(self,**initial):

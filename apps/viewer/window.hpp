@@ -12,7 +12,8 @@ public:
     ~Window();
     Window(const Window&)=delete;
     Window& operator=(const Window&)=delete;
-    void sync(const Frame& frame, const model::RigidBodyAsset* asset=nullptr);
+    void sync(const Frame& frame, const model::RigidBodyAsset* asset=nullptr,
+              const model::RigidBodyAsset* payload_asset=nullptr);
     bool isRunning() const;
     void close();
     void screenshot(const std::filesystem::path& path);

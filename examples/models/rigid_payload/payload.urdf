@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<robot name="offset_payload">
+  <link name="base">
+    <inertial>
+      <origin xyz="-0.02 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.015" iyz="0" izz="0.02"/>
+    </inertial>
+    <visual>
+      <origin xyz="-0.02 0 0"/>
+      <geometry><box size="0.2 0.15 0.12"/></geometry>
+    </visual>
+  </link>
+  <link name="cable_attachment"/>
+  <joint name="cable_mount" type="fixed">
+    <parent link="base"/>
+    <child link="cable_attachment"/>
+    <origin xyz="0.08 0 0.1"/>
+  </joint>
+</robot>

@@ -1,19 +1,34 @@
 #pragma once
+#include <csim/numerics/rk4.hpp>
+#include <csim/numerics/explicit_runge_kutta.hpp>
+#include <csim/math/quaternion.hpp>
 
 namespace csim::numerics {
-
-// Reserved type only, NOT implemented. See the mechanical-system/payload paper
-// linked in docs/numerical-integration.md; this is a family, not a fixed tableau.
-// TODO: Select RKMK or commutator-free scheme and its order before defining step.
-//       Separate manifold State from tangent/algebra derivative; define group
-//       action, exp/retraction, stage composition and coupled Euclidean updates.
-//       Preserve the project's Hamilton wxyz, body-rate, body-to-world convention.
-//       Verify constant-rate exact reference, varying noncommuting rotations,
-//       order and manifold residuals for SO(3)/S^2 as applicable.
-//       A single exp(dt*omega) with frozen omega is NOT general fourth order.
-//       Manifold preservation does NOT automatically imply symplecticity or
-//       exact energy conservation, nor enforce all coupled cable constraints.
-template <typename State, typename Geometry>
-class LieGroupIntegrator;
-
-} // namespace csim::numerics
+inline math::Quaternion rotationExp(math::Vector3 rotation) {
+    const double angle=rotation.norm();
+    if (!std::isfinite(angle)) throw std::overflow_error("Rotation exponential overflow");
+    if (angle==0) return {};
+    return math::Quaternion::fromAxisAngle(rotation,angle);
+}
+inline math::Vector3 dexpInverse(math::Vector3 rotation,math::Vector3 rate,bool body_rate) {
+    const auto cross=rotation.cross(rate);
+    const auto result=rate+cross*(body_rate ? .5 : -.5)+rotation.cross(cross)*(1./12);
+    if (!result.isFinite()) throw std::overflow_error("Lie algebra derivative overflow");
+    return result;
+}
+template<class State,class Geometry> class LieGroupIntegrator {
+public:
+    template<class Control,class Dynamics>
+    static State step(double time,const State& state,const Control& control,double dt,
+                      Dynamics&& dynamics,bool fourth_order=true) {
+        const auto initial=Geometry::chart(state);
+        auto evaluate=[&](double stage,const State& chart,const Control& input) {
+            const auto physical=Geometry::retract(state,chart);
+            return Geometry::rate(chart,physical,dynamics(stage,physical,input));
+        };
+        const auto result=fourth_order ? rk4Step(time,initial,control,dt,evaluate)
+                                      : midpointStep(time,initial,control,dt,evaluate);
+        return Geometry::retract(state,result);
+    }
+};
+}

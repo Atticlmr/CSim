@@ -56,6 +56,7 @@ private:
     friend DroneSnapshot getState(const DroneModel&, const DroneData&);
     friend void setControl(const DroneModel&, DroneData&, dynamics::DroneControl);
     friend void reset(const DroneModel&, DroneData&, dynamics::DroneState);
+    friend class DroneBatch;
     std::shared_ptr<DroneModel> model_;
     dynamics::DroneState state_;
     dynamics::DroneControl control_{};

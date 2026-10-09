@@ -1,8 +1,10 @@
 #pragma once
 #include <csim/model/description.hpp>
+#include <map>
 
 namespace csim::model {
 Pose compose(const Pose& parent, const Pose& child);
+void validateInertial(const InertialDescription& inertial);
 void validateDescription(const ModelDescription& description);
 
 // Source link frames survive fixed-body aggregation; B is the assembly CoM.
@@ -20,6 +22,7 @@ struct RigidBodyAsset {
     Pose initial_pose_WB;
     std::vector<GeometryInstance> visuals_B;
     std::vector<FixedLink> links; // Source order; includes links without visuals.
+    std::map<std::string, Pose> attachments_B;
 };
 // Fixed roots/unspecified URDF mobility require explicit permission to free them.
 // R_BR is the source root axes -> desired FLU body axes rotation; W is source A.

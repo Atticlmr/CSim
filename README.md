@@ -4,18 +4,60 @@
 后续主要使用 Python 脚本配置和运行实验，C++ 负责动力学与数值计算。
 已有虚拟环境时在根目录执行 `uv pip install .`，随后直接 `import csim`。
 源码安装需要 xmake 和 C++17 编译器；匹配的 wheel 可免编译安装，见 [uv 安装与分发](docs/python-installation.md)。
-当前已实现 OpenGL/GLFW 三维可视化与轨迹回放，实现三维向量、固定大小矩阵、LU 分解与线性求解、旋转矩阵、四元数、Euler、中点/Heun RK2、辛 Euler/Verlet、固定步长 RK4 和 Dormand–Prince 5(4) 自适应积分；固定悬点平面单摆、无吊载无人机、绷紧绳索质点吊载耦合及 Python 控制、步进与状态读取已实现；CTBR 内环、单旋翼输入、执行器响应和指令延迟由纯 Python 的 `csim_control` 提供，C++ 只接收实际推力/力矩；默认关闭的 SPAD、两端相对空气速度阻力、确定性风场、受约束旋翼分配、可重复 Python 实验及可选绷紧/松弛绳索已实现；弹性绳、接触和连续时间冲量根定位仍待开发。
+当前已实现 OpenGL/GLFW 三维可视化与轨迹回放，三文件刚体吊载可直接实时显示本体姿态和两端吊点。数学层提供固定大小矩阵、LU、Cholesky、列主元 QR、支持 1×1/2×2 主元的 LDLT 和 Jacobi SVD。积分器包含 Euler、RK2/RK4、Dopri5、DOP853、隐式 Euler/中点、Radau IIA5、BDF1/2、Lie 中点/RKMK4 和受模型限制的辛方法/RATTLE。固定悬点单摆、无人机、质点吊载、偏置吊点刚体吊载及松紧绳事件已实现。CTBR 内环、单旋翼输入、执行器响应和指令延迟由纯 Python 的 `csim_control` 提供，C++ 只接收实际推力/力矩。弹性绳、接触和多绳联合求解仍待开发。
 
 开发计划已拆分为七份阶段文档，入口见 [开发流程总览](docs/development-workflow.md)；
 构建、验证和提交步骤见 [日常开发流程](docs/development/daily-workflow.md)。
 物理模型见 [单摆](docs/pendulum.md)、[无吊载无人机](docs/drone.md) 与 [无人机吊载耦合](docs/suspended-payload.md)。无人机吊载的坐标与状态定义见 [建模约定](docs/modeling-conventions.md)，已实现功能见 [三维向量接口](docs/vector3.md)、[固定大小矩阵接口](docs/matrix.md)、[LU 求解接口](docs/lu.md)、[旋转与四元数](docs/rotation.md) 和 [Python 开发指南](docs/python.md)。
 松紧绳扩展的研究依据见 [文献调研](docs/slack-taut-impact-research.md) 与 [RotorTM 详细解析](docs/rotortm-analysis.md)，包含单绳冲量、多机联合求解及验收设计。
-已实现的积分接口见 [RK4](docs/rk4.md) 与 [Dormand–Prince](docs/dormand-prince.md)，其他积分算法的选择与接口占位见 [数值积分调研](docs/numerical-integration.md)，包括自适应、辛、刚性及约束/李群方法。
+当前积分方法、矩阵分解接口和支持范围见 [数值方法使用说明](examples/python/NUMERICAL_METHODS.md)。
 论文建模与实现见 [Zhu 等（2025）建模与可选 SPAD 阻尼解析](docs/zhu-2025-payload-model.md)、[CTBR、单旋翼推力及响应延迟](docs/control-and-response-models.md)。实际配置见 [空气力与风场](docs/aerodynamics.md)，记录、回放、参数扫描和旋翼响应辨识见 [可重复实验](docs/reproducible-experiments.md)。
 模型加载见 [URDF/MJCF 与 TinyXML2](docs/model-import.md)，支持固定连接树、显式惯性、基本几何、OBJ/STL 及固定部件质量/质心/惯性合并。通过 `model.link_names`、`csim.get_link_state(model, data, name)` 和 `csim.get_link_states(model, data)` 查询固定 link 的位置、姿态、速度、加速度及自身质心状态；运行示例为 `examples/python/link_states.py`。
 [Python 实时窗口](docs/python-viewer.md) 已提供 Viewer、sync(data)、is_running() 和 close()，显示频率不改变物理结果。
 
-积分器可通过模型 `integrator=` 选择，默认 RK4；自适应子步不改变对外步长和 Python 控制时钟，见 [积分器使用](docs/integrators.md)。
+积分器可通过模型 `integrator=` 选择，默认 RK4；自适应子步不改变对外步长和 Python 控制时钟，见 [数值方法使用说明](examples/python/NUMERICAL_METHODS.md)。
+
+## 三文件刚体吊载
+
+使用 `csim.load_suspended_model(drone_path, cable_path, payload_path)`，分别读取无人机、绳索和吊载物。
+两个本体支持 URDF、MJCF 或 JSON，可混用；各自的固定吊点名称统一为 `cable_attachment`。
+URDF 用同名 fixed link，MJCF 用同名 site；质量、整体质心、惯量和吊点质心偏置自动解析。
+两个刚体均具有独立姿态和角速度，绳索张力和收紧冲量同时计入两端力矩。
+完整配置和初态约定见 [三文件示例](examples/models/rigid_payload/README.md)。
+
+```bash
+xmake run csim_python examples/python/rigid_payload.py
+xmake run csim_python examples/python/rigid_payload.py --format json
+xmake run csim_python examples/python/rigid_payload.py --format mjcf
+```
+
+## CPU 批量仿真
+
+`DroneBatch` 和 `RigidPayloadBatch` 通过 C++ 常驻线程并行推进环境，计算期间释放 Python GIL；后者包含两个刚体、偏置吊点和松紧绳事件。
+每个环境拥有独立状态，整批成功后提交；支持按索引重置和 NumPy 状态快照。
+
+```python
+import csim
+import numpy as np
+
+model = csim.DroneModel(timestep=.002)
+batch = csim.DroneBatch(model, num_envs=1024, threads=4)
+actions = np.tile([model.mass * model.gravity, 0, 0, 0], (batch.num_envs, 1))
+batch.step(actions, substeps=5)
+snapshot = batch.get_state()
+```
+
+动作数组为 `(N,4)`：实际总推力与机体力矩 xyz。`substeps` 个物理步期间动作保持不变。
+快照包含 `state (N,13)`、`control (N,4)`、`time (N,)`；状态列依次为位置 xyz、速度 xyz、姿态 wxyz、机体角速度 xyz。
+`batch.reset(states, indices=[...])` 重置指定环境并清除其时间和控制，省略索引则重置全部环境。
+`threads=1` 为串行基线，`threads=0` 根据硬件线程数自动选择并限制在环境数以内；训练时建议显式限制线程数。
+刚体批量状态为 `state (N,27)`：无人机 13 项、载荷 13 项和 `slack` 标志；另外返回 `event_count`、`event_type`、`event_time` 与 `event_energy_loss`。
+刚体批量的 `substeps` 调用会汇总其中所有环境事件，失败时整批状态、时间和事件都不提交。
+控制输入触发的 `release` 事件在设置控制后立即可见，并保留在下一次成功物理步的事件列表中；后续步不重复报告，重置会清除待处理事件。
+`RigidPayloadModel.from_config` 与模型文件导入使用同一套质量和惯量校验，包括主惯量三角不等式。
+吞吐基准：`xmake run csim_python examples/python/batch_benchmark.py --kind both --num-envs 1024 --threads 4`；需 NumPy，建议使用 release 构建。
+当前仍未提供奖励、终止条件和 Gymnasium 任务适配。
+`docs/` 为本地说明目录，不纳入 Git 跟踪。
 
 ## 目录
 
@@ -57,8 +99,8 @@ CSim/
 ```
 
 空目录使用 `.gitkeep` 保留，添加实际文件后可移除对应占位文件。
-`include/csim/math/` 中的 `vector.hpp`、`matrix.hpp`、`lu.hpp`、`rotation.hpp` 和 `quaternion.hpp` 已实现；其他数学公共头文件仍为占位文件。
-`numerics/rk4.hpp`、`dormand_prince.hpp` 的 5(4) 试算和驱动器已实现；DOP853 仍是前置声明，其他积分函数使用 `= delete` 占位，复杂求解器只前置声明。
+`include/csim/math/` 中的数学公共头文件均已实现，包含四种新增矩阵分解。
+`include/csim/numerics/` 提供显式、自适应、隐式、RATTLE 和 Lie 群积分；DOP853 位于 `dop853.hpp`，隐式方法可通过 `StateCodec` 扩展复合状态。
 
 ## 构建与运行
 
@@ -82,7 +124,7 @@ xmake run simulator payload
 xmake test -v
 ```
 
-`xmake test` 会构建并运行 `vector_test`、`matrix_test`、`lu_test`、`rotation_test`、`rk4_test`、`dormand_prince_test`、`pendulum_test`、`pendulum_simulation_test`、`drone_test`、`drone_simulation_test`、`suspended_payload_test`、`suspended_payload_simulation_test` 和 `viewer_test`，以及 `explicit_methods_test`，共 81 组 C++ 检查，无需图形依赖。启用 Python 后还会执行 68 项 Python 物理、模型导入、link 状态、控制和实验测试，另有 4 项图形测试。
+`xmake test` 会构建并运行数学、积分、单摆、无人机、点质量吊载、刚体吊载、事件及 CPU 批量仿真测试，无需图形依赖。启用 Python 后还会执行物理接口、三文件模型导入、link 状态、批量仿真、控制和实验测试，另有独立图形测试。
 
 切换 Release 使用 `xmake f -m release`，然后重新执行 `xmake build`。
 构建产物位于 `build/<平台>/<架构>/<模式>/`，通过 `xmake run` 无需手写路径。
@@ -125,6 +167,15 @@ xmake run csim_python examples/python/suspended_payload.py
 
 ## 可视化入口
 
+三文件刚体吊载实时窗口（已安装 Python 包的虚拟环境）：
+
+```bash
+.venv/bin/python examples/python/rigid_payload.py --viewer --integrator lie_rk4
+```
+
+可切换 `--format mjcf` / `--format json`；截图使用 `--screenshot build/rigid-payload.ppm`，隐藏窗口使用 `--hidden`。
+窗口显示两本体各自的导入几何和姿态，绳索连接实际吊点。松弛绳以两吊点之间的虚线示意，不模拟柔性绳形。
+
 viewer 默认不参与构建。启用时需要 pkg-config、GLFW 3.3 或更高版本和 OpenGL 开发库，
 运行时需要图形显示环境和支持 OpenGL 3.3 Core 的驱动。
 Ubuntu 可安装开发依赖：
@@ -149,6 +200,17 @@ xmake run viewer build/flight.csv
 ```
 
 录制同时保存 JSON 参数与代码版本元数据，已有记录不会被覆盖。
+刚体吊载可传入三份文件，CSV v2 保留载荷姿态、偏置吊点和松绳状态，viewer 兼容 v1/v2：
+
+```bash
+xmake run csim_python examples/python/record_payload.py build/rigid.csv --duration 1 \
+  --drone examples/models/rigid_payload/drone.urdf \
+  --cable examples/models/rigid_payload/cable.json \
+  --payload examples/models/rigid_payload/payload.urdf
+xmake run viewer build/rigid.csv
+```
+
+实验 JSON 记录和 `csim_experiments.replay` 也支持刚体吊载；配置恢复不依赖原始模型文件，但不会恢复源 link 树和视觉网格。
 着色器从可执行文件旁的 `shaders/` 加载，GL 函数通过 GLFW 加载，支持离屏帧缓冲截图。
 完整操作、CSV 格式、时钟和显示限制见 [可视化文档](docs/visualization.md)。
 后续 PX4/APM 软件/硬件在环的协议、传感器、执行器和时间同步要求见 [飞控接入设计](docs/flight-controller-integration.md)，目前尚未实现飞控桥接。

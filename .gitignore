@@ -79,5 +79,8 @@ wheelhouse/
 .pytest_cache/
 runs/
 
+# Local project documentation
+/docs/
+
 # Wavefront source meshes (not compiler object files)
 !examples/models/*.obj

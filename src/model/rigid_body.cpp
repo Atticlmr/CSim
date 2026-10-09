@@ -14,7 +14,8 @@ void pose(const Pose& p) {
     require(p.position.isFinite() && p.position.norm()<=10000,"Model pose outside finite 10000 m limit");
     (void)p.orientation.normalized();
 }
-void inertia(const InertialDescription& i) {
+}
+void validateInertial(const InertialDescription& i) {
     pose(i.body_from_inertial);
     (void)dynamics::Drone(i.mass,i.inertia); // Positive mass, symmetric positive definite tensor.
     // Physical principal-moment triangle inequalities: trace(J)/2 I - J is PSD.
@@ -36,6 +37,7 @@ void inertia(const InertialDescription& i) {
     const double trace=j(0,0)+j(1,1)+j(2,2);
     for (std::size_t a=0;a<3;++a) require(2*j(a,a)<=trace+1e-12,"Inertia violates principal-moment triangle inequality");
 }
+namespace {
 std::vector<Pose> transforms(const ModelDescription& d) {
     std::map<std::string,std::size_t> names;
     for (std::size_t i=0;i<d.bodies.size();++i) names.emplace(d.bodies[i].name,i);
@@ -83,7 +85,7 @@ void validateDescription(const ModelDescription& d) {
         require(!b.name.empty()&&names.emplace(b.name,true).second,"Empty or duplicate body name");
         if (!b.parent) ++roots;
         pose(b.parent_from_body);
-        if (b.inertial) inertia(*b.inertial);
+        if (b.inertial) validateInertial(*b.inertial);
         for (const auto& g:b.visuals) {
             geometry(g);
             require(++geometries<=2048,"Too many visual geometries");
@@ -93,6 +95,13 @@ void validateDescription(const ModelDescription& d) {
         for (const auto& g:b.collisions) geometry(g);
     }
     require(roots==1,"Model requires exactly one root body");
+    std::map<std::string,bool> attachment_names;
+    for (const auto& attachment:d.attachments) {
+        require(!attachment.name.empty() && attachment_names.emplace(attachment.name,true).second,
+                "Empty or duplicate attachment name");
+        require(names.count(attachment.body),"Unknown attachment body");
+        pose(attachment.body_from_attachment);
+    }
     (void)transforms(d);
 }
 RigidBodyAsset buildRigidBody(const ModelDescription& d,bool free_base,math::Quaternion q_BR) {
@@ -101,25 +110,32 @@ RigidBodyAsset buildRigidBody(const ModelDescription& d,bool free_base,math::Qua
     q_BR=q_BR.normalized();
     const auto poses=transforms(d);
     RigidBodyAsset result;
-    std::vector<Pose> inertials;
+    std::vector<Pose> inertials(d.bodies.size());
     Pose source_root;
     for (std::size_t n=0;n<d.bodies.size();++n) {
         const auto& b=d.bodies[n];
-        require(b.inertial.has_value(),"Every physical body requires explicit mass and inertia");
         if (!b.parent) source_root=b.parent_from_body;
-        inertials.push_back(compose(poses[n],b.inertial->body_from_inertial));
+        if (!b.inertial) {
+            require(b.parent.has_value() && b.visuals.empty() && b.collisions.empty(),
+                    "Every physical body requires explicit mass and inertia");
+            continue;
+        }
+        inertials[n]=compose(poses[n],b.inertial->body_from_inertial);
         result.mass+=b.inertial->mass;
-        result.center_R+=inertials.back().position*b.inertial->mass;
+        result.center_R+=inertials[n].position*b.inertial->mass;
     }
     result.center_R/=result.mass;
     require(std::isfinite(result.mass)&&result.center_R.isFinite(),"Aggregate mass/center overflow");
     math::Matrix3 J;
     for (std::size_t n=0;n<d.bodies.size();++n) {
-        const auto& body=d.bodies[n]; const auto& i=*body.inertial;
+        const auto& body=d.bodies[n];
         const Pose body_from_link{
             q_BR.rotate(poses[n].position-result.center_R),
             (q_BR*poses[n].orientation).normalized()};
-        result.links.push_back({body.name,body.parent,body_from_link,i.body_from_inertial.position});
+        result.links.push_back({body.name,body.parent,body_from_link,
+            body.inertial ? body.inertial->body_from_inertial.position : math::Vector3{}});
+        if (!body.inertial) continue;
+        const auto& i=*body.inertial;
         const auto r=inertials[n].orientation.toRotationMatrix();
         const auto delta=inertials[n].position-result.center_R;
         math::Matrix3 shift;
@@ -135,7 +151,15 @@ RigidBodyAsset buildRigidBody(const ModelDescription& d,bool free_base,math::Qua
         }
     }
     const auto r=q_BR.toRotationMatrix(); result.inertia_B=r*J*r.transposed();
-    inertia({result.mass,{},result.inertia_B,{}});
+    for (const auto& attachment:d.attachments) {
+        for (const auto& link:result.links) {
+            if (link.name==attachment.body) {
+                result.attachments_B.emplace(attachment.name,
+                    compose(link.body_from_link,attachment.body_from_attachment));
+            }
+        }
+    }
+    validateInertial({result.mass,{},result.inertia_B,{}});
     result.initial_pose_WB={source_root.position+source_root.orientation.rotate(result.center_R),
         (source_root.orientation*q_BR.conjugated()).normalized()};
     return result;

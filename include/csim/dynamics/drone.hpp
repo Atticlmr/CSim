@@ -142,8 +142,6 @@ private:
                 matrix(i, j) = matrix(j, i) = matrix(i, j) * 0.5 + matrix(j, i) * 0.5;
             }
         }
-        // Sylvester's criterion for this 3x3 parameter validation. This is not a
-        // general decomposition API; Cholesky/LDLT/QR/SVD remain reserved TODOs.
         const long double a = static_cast<long double>(matrix(0, 0)) / scale;
         const long double b = static_cast<long double>(matrix(0, 1)) / scale;
         const long double c = static_cast<long double>(matrix(0, 2)) / scale;

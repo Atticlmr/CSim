@@ -197,8 +197,5 @@ private:
 
 // TODO: Dense output and optional FSAL reuse require explicit cache invalidation
 //       on state/control/model changes. Neither is provided by this first version.
-// TODO: High-accuracy nonstiff solver; separate DOP853 tableau and error estimator.
-template <typename State>
-class Dop853;
 
 } // namespace csim::numerics

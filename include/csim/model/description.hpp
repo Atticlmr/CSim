@@ -88,6 +88,13 @@ struct BodyDescription {
     // validateDescription checks names, references, connectivity and cycles.
 };
 
+struct AttachmentDescription {
+    std::string name;
+    std::string body;
+    Pose body_from_attachment;
+    SourceLocation source;
+};
+
 enum class SourceFormat { urdf, mjcf };
 enum class RootMotion { unspecified, fixed, free };
 
@@ -97,6 +104,7 @@ struct ModelDescription {
     SourceLocation source;
     RootMotion root_motion = RootMotion::unspecified;
     std::vector<BodyDescription> bodies;
+    std::vector<AttachmentDescription> attachments;
     // URDF alone does not choose root mobility. MJCF root without a joint is
     // fixed; a supported root freejoint is free. Never silently unfix a model.
     // Preserve source-frame placement; choosing W/FLU and initial state

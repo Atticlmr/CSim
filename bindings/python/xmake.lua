@@ -22,8 +22,9 @@ target("csim_python")
     add_rules("python.module", {soabi = false})
     set_basename("csim")
     set_symbols("debug", "hidden")
-    add_files("module.cpp", "model_loading.cpp", "link_binding.cpp", "environment_binding.cpp")
+    add_files("module.cpp", "model_loading.cpp", "link_binding.cpp", "environment_binding.cpp", "batch_binding.cpp", "rigid_payload_binding.cpp", "rigid_payload_batch_binding.cpp")
     add_deps("csim_simulation", "csim_io")
+    if is_plat("linux") then add_syslinks("pthread") end
 
     if is_plat("linux") then add_rpathdirs("$ORIGIN/csim_viewer/.libs") end
     on_config(configure_python)

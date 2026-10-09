@@ -1,0 +1,8 @@
+{
+  "length": 1.0,
+  "mode": "hybrid",
+  "initial_direction_W": [0.0, 0.0, -1.0],
+  "event_max_step": 0.002,
+  "event_tolerance": 1e-10,
+  "max_events": 64
+}

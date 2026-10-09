@@ -48,7 +48,7 @@ jobs:
       - name: Install wheel in a clean environment
         run: |
           uv venv .venv
-          uv pip install --python .venv/bin/python --no-index dist/*.whl
+          uv pip install --python .venv/bin/python dist/*.whl
           .venv/bin/python -I -c 'import csim, csim_experiments, sys; from pathlib import Path; assert Path(csim.__file__).is_relative_to(Path(sys.prefix)); assert Path(csim_experiments.__file__).is_relative_to(Path(sys.prefix)); print(csim.__file__)'
 
       - name: Test installed physical API
@@ -56,6 +56,9 @@ jobs:
           .venv/bin/python -I -m unittest discover -s tests/python -v
           .venv/bin/python -I examples/python/drone.py
           .venv/bin/python -I examples/python/suspended_payload.py
+          .venv/bin/python -I examples/python/rigid_payload.py
+          .venv/bin/python -I examples/python/rigid_payload.py --format json
+          .venv/bin/python -I examples/python/rigid_payload.py --format mjcf
 
       - name: Test installed viewer
         env:
