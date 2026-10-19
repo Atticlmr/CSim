@@ -59,6 +59,48 @@ snapshot = batch.get_state()
 当前仍未提供奖励、终止条件和 Gymnasium 任务适配。
 `docs/` 为本地说明目录，不纳入 Git 跟踪。
 
+### 随机种子与批量重置
+
+Python 层提供 `csim_experiments.RandomStreams` 和 `BatchRandomizer`。
+每个环境通过 `SeedSequence(seed, spawn_key=(environment_id,))` 派生独立 PCG64 随机流，
+环境编号相同时，结果不依赖线程数、批量大小或其他环境的采样 / 重置顺序。
+`seed` 接受 `[0, 2**128)` 的整数；构造时省略种子或调用 `seed(None)` 会生成新种子，实际值可从 `random.metadata` 读取并记录。
+
+```python
+from csim_experiments import BatchRandomizer
+
+randomizer = BatchRandomizer(batch, seed=42)
+randomizer.reset(seed=42, position_low=[-1, -1, 1], position_high=[1, 1, 2])
+randomizer.reset(indices=[3, 1], position_low=[-1, -1, 1], position_high=[1, 1, 2])
+noise = randomizer.random.normal(scale=.01, size=3, indices=[3, 1])
+```
+
+随机重置以创建 `BatchRandomizer` 时的状态快照为固定模板；也可传入 `base_state`。
+位置和速度范围为相对模板的世界系偏移，单位为 m 和 m/s；默认偏移为零。
+刚体吊载对无人机与载荷使用相同平移和速度偏移，保持原有姿态、吊点距离与相对速度。
+物理状态仍经过底层重置校验；失败时物理状态、种子与随机流均不提交。
+`reset(seed=整数)` 重新开始全部随机流且只能用于全量重置；`reset()` / `reset(seed=None)` 继续现有随机流。
+`randomizer.seed(整数)` 只重置随机流，不改变物理状态。
+`RandomStreams(num_envs, seed=42)` 可独立使用，提供 `uniform` / `normal`，输出首维对应所选环境编号；`size` 指每个环境的采样形状。
+随机化对象的调用会串行执行；不要在随机重置期间从其他线程直接操作同一个底层 batch。
+接口不修改 Python / NumPy 全局随机状态，也不控制外部训练库的随机数。
+精确复现需记录 `random.metadata`、各环境采样调用顺序和软件版本；不保证跨 NumPy 版本或不同硬件的轨迹逐位一致。
+质量、惯量、绳长和姿态随机化仍需后续单独实现。
+运行验证示例：`xmake run csim_python examples/python/seeded_batch.py --seed 42`。
+
+## 在环仿真插件接口
+
+已预留 [ROS2 插件](plugins/ros2/README.md) 与 [PX4 插件](plugins/px4/README.md) 的独立开发目录，
+以及随 Python 包安装的 `csim_bridge` 公共接口。生命周期包括连接启动、真值发布、实际推力 / 力矩轮询、重置和关闭；
+独立插件可通过 `csim.bridges` entry point 注册，只有加载所选插件才导入其协议依赖。
+协议、传感器、执行器映射与时间同步在插件层实现，物理数据与步进时钟由外部运行器持有。
+当前仅提供接口和本地假桥接示例，ROS2 / PX4 实际通信和 SITL/HITL 调度尚未实现。
+接入约定见 [插件说明](plugins/README.md)，无需外部依赖的示例：
+
+```bash
+xmake run csim_python examples/python/bridge_stub.py
+```
+
 ## 目录
 
 ```text
@@ -80,7 +122,9 @@ CSim/
 ├── src/                   # 按上述模块划分的实现与内部头文件
 ├── bindings/python/       # pybind11 模块及构建配置
 │   ├── csim_control/      # Python 控制、分配、响应及延迟
+│   ├── csim_bridge/       # 可选在环桥接协议与插件加载
 │   └── csim_experiments/  # Python 外环、实验与记录
+├── plugins/               # ROS2 / PX4 独立桥接插件预留位置
 ├── apps/
 │   ├── simulator/         # 命令行仿真入口
 │   └── viewer/            # OpenGL/GLFW 可视化程序
@@ -103,6 +147,23 @@ CSim/
 `include/csim/numerics/` 提供显式、自适应、隐式、RATTLE 和 Lie 群积分；DOP853 位于 `dop853.hpp`，隐式方法可通过 `StateCodec` 扩展复合状态。
 
 ## 构建与运行
+
+项目也支持 CMake。默认构建核心 C++ 程序和测试，不需要 Python 或图形依赖：
+
+```bash
+cmake -S . -B build-cmake -DCSIM_BUILD_TESTS=ON
+cmake --build build-cmake -j 2
+ctest --test-dir build-cmake --output-on-failure
+```
+
+需要 Python 绑定时，先安装 pybind11 的 CMake 包，再追加
+`-DCSIM_BUILD_PYTHON=ON`；需要实时 viewer 时追加
+`-DCSIM_BUILD_VIEWER=ON`，并安装 GLFW 3.3+、OpenGL 和 TinyXML2 开发包。
+Python 测试可通过 `-DCSIM_BUILD_PYTHON_TESTS=ON` 接入 CTest，批量性能测试使用
+`cmake --build build-cmake --target csim_benchmark`；安装后可通过
+`find_package(CSim CONFIG REQUIRED)` 使用导出的 `CSim::csim_io` 等目标。
+Python wheel 默认继续使用 xmake；需要用 CMake 构建 wheel 时设置
+`CSIM_BUILD_SYSTEM=cmake`，例如 `CSIM_BUILD_VIEWER=0 CSIM_BUILD_SYSTEM=cmake uv build`。
 
 需要 [xmake 3.1.1 或更高版本](https://xmake.io/guide/quick-start.html)，
 以及支持 C++17 的编译器、pkg-config 和 TinyXML2 开发库；CI 固定使用 xmake 3.1.1。

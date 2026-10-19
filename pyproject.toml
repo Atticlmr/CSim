@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 [tool.setuptools]
-packages = ["csim_viewer", "csim_experiments", "csim_control"]
+packages = ["csim_viewer", "csim_experiments", "csim_control", "csim_bridge"]
 py-modules = []
 
 [tool.setuptools.package-dir]
@@ -35,6 +35,9 @@ cache-keys = [
     {file = "setup.py"},
     {file = "MANIFEST.in"},
     {file = "xmake.lua"},
+    {file = "CMakeLists.txt"},
+    {file = "cmake/CSimConfig.cmake.in"},
+    {file = "setup.py"},
     {file = "bindings/python/*.cpp"},
     {file = "bindings/python/*.hpp"},
     {file = "bindings/python/*.py"},
@@ -45,5 +48,6 @@ cache-keys = [
     {file = "bindings/python/csim_viewer/**/*"},
     {file = "bindings/python/csim_experiments/**/*.py"},
     {file = "bindings/python/csim_control/**/*.py"},
+    {file = "bindings/python/csim_bridge/**/*.py"},
     {env = "CSIM_BUILD_VIEWER"},
 ]

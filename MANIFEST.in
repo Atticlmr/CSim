@@ -7,3 +7,4 @@ recursive-include examples *.py *.urdf *.xml *.obj *.json *.md
 prune docs
 recursive-include src *.md *.cpp *.hpp
 recursive-include configs *.json *.md
+recursive-include plugins *.md

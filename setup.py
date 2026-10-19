@@ -15,6 +15,7 @@ from setuptools.command.build_ext import build_ext
 
 ROOT = Path(__file__).resolve().parent
 BUILD_VIEWER = os.environ.get("CSIM_BUILD_VIEWER", "1") != "0"
+BUILD_SYSTEM = os.environ.get("CSIM_BUILD_SYSTEM", "xmake").lower()
 # Keep release metadata aligned with the existing xmake project version.
 VERSION = re.search(r'^set_version\("([^"]+)"\)',
                     (ROOT / "xmake.lua").read_text(), re.MULTILINE).group(1)
@@ -88,7 +89,54 @@ class XmakeBuildExt(build_ext):
                         shutil.copy2(license_file, libraries / (package + "-LICENSE"))
 
 
+class CMakeBuildExt(build_ext):
+    """Build both Python extensions from one isolated CMake build tree."""
+
+    def build_extensions(self):
+        if sys.platform not in ("linux", "darwin", "win32"):
+            raise RuntimeError("CSim CMake builds require Linux, macOS or Windows.")
+        cmake = shutil.which(os.environ.get("CSIM_CMAKE", "cmake"))
+        if not cmake:
+            raise RuntimeError("CMake is required for CSIM_BUILD_SYSTEM=cmake.")
+        pybind_cmake = subprocess.check_output(
+            [sys.executable, "-m", "pybind11", "--cmakedir"], text=True).strip()
+        with tempfile.TemporaryDirectory(prefix="csim-cmake-wheel-") as directory:
+            build_dir = Path(directory) / "build"
+            configure = [
+                cmake, "-S", str(ROOT), "-B", str(build_dir),
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCSIM_BUILD_TESTS=OFF",
+                "-DCSIM_BUILD_PYTHON=ON",
+                "-DCSIM_BUILD_VIEWER=" + ("ON" if BUILD_VIEWER else "OFF"),
+                "-DCSIM_BUILD_BENCHMARKS=OFF",
+                "-DCSIM_BUILD_PYTHON_TESTS=OFF",
+                "-DPython3_EXECUTABLE=" + sys.executable,
+                "-Dpybind11_DIR=" + pybind_cmake,
+            ]
+            subprocess.run(configure, check=True)
+            targets = ["csim"]
+            if BUILD_VIEWER:
+                targets.append("csim_python_viewer")
+            for target in targets:
+                command = [cmake, "--build", str(build_dir), "--target", target]
+                if self.parallel:
+                    command.extend(["--parallel", str(self.parallel)])
+                subprocess.run(command, check=True)
+
+            suffix = sysconfig.get_config_var("EXT_SUFFIX")
+            for extension in self.extensions:
+                name = extension.name.rsplit(".", 1)[-1]
+                source = build_dir / (name + suffix)
+                if not source.is_file():
+                    raise RuntimeError(f"CMake did not produce {source}")
+                destination = Path(self.get_ext_fullpath(extension.name)).resolve()
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+
+
+BuildExt = CMakeBuildExt if BUILD_SYSTEM == "cmake" else XmakeBuildExt
+
 setup(version=VERSION,
       ext_modules=[Extension("csim", sources=["bindings/python/module.cpp"])] +
                   ([Extension("_csim_viewer", sources=["bindings/python/viewer_module.cpp"])] if BUILD_VIEWER else []),
-      cmdclass={"build_ext": XmakeBuildExt})
+      cmdclass={"build_ext": BuildExt})

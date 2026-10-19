@@ -31,6 +31,7 @@ target("csim_python")
     after_build(function (target)
         os.cp(path.join(os.scriptdir(), "csim_experiments"), target:targetdir())
         os.cp(path.join(os.scriptdir(), "csim_control"), target:targetdir())
+        os.cp(path.join(os.scriptdir(), "csim_bridge"), target:targetdir())
     end)
 
     -- xmake run csim_python script.py [args], or no args for an interactive shell.
@@ -39,6 +40,7 @@ target("csim_python")
         -- Refresh pure Python sources even when no native object needed rebuilding.
         os.cp(path.join(os.scriptdir(), "csim_experiments"), target:targetdir())
         os.cp(path.join(os.scriptdir(), "csim_control"), target:targetdir())
+        os.cp(path.join(os.scriptdir(), "csim_bridge"), target:targetdir())
         os.addenv("PYTHONPATH", path.absolute(target:targetdir()))
         os.execv(target:data("csim.python"), option.get("arguments") or {})
     end)
@@ -47,6 +49,7 @@ target("csim_python")
     on_test(function (target, opt)
         os.cp(path.join(os.scriptdir(), "csim_experiments"), target:targetdir())
         os.cp(path.join(os.scriptdir(), "csim_control"), target:targetdir())
+        os.cp(path.join(os.scriptdir(), "csim_bridge"), target:targetdir())
         os.addenv("PYTHONPATH", path.absolute(target:targetdir()))
         local code, errors = os.execv(target:data("csim.python"), {
             "-m", "unittest", "discover", "-s",
