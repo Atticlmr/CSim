@@ -126,6 +126,12 @@ public:
         }
         return result;
     }
+    // Vector3 convenience overload, mirroring PartialPivLU and Cholesky.
+    template<std::size_t Dimension=Size>
+    std::enable_if_t<Dimension==3 && Dimension==Size,Vector3> solve(const Vector3& rhs) const {
+        const auto result=solve(Matrix<3,1>{rhs.x,rhs.y,rhs.z});
+        return {result(0,0),result(1,0),result(2,0)};
+    }
 private:
     Matrix<Size,Size> lower_=Matrix<Size,Size>::identity(),diagonal_;
     std::array<std::size_t,Size> permutation_{},blocks_{};

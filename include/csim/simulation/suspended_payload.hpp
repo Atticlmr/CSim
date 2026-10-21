@@ -87,10 +87,9 @@ inline SuspendedPayloadData makeData(std::shared_ptr<SuspendedPayloadModel> mode
     if (state.slack && !model->hybridCable()) throw std::invalid_argument("Slack state requires cable_mode=hybrid");
     auto candidate = dynamics::SuspendedPayload::normalizedState(state,model->physics().length());
     if (model->hybridCable()) candidate=cable_detail::admissible(model->physics(),candidate,control,0);
+    // Validate the initial state once; construction only stores the same control.
     (void)model->physics().observe(candidate, control, 0, !model->hybridCable());
-    auto data=SuspendedPayloadData(model, control, candidate);
-    (void)model->physics().observe(candidate,data.control_, 0, !model->hybridCable());
-    return data;
+    return SuspendedPayloadData(model, control, candidate);
 }
 
 inline SuspendedPayloadSnapshot getState(const SuspendedPayloadModel& model, const SuspendedPayloadData& data) {

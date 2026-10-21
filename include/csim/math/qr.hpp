@@ -81,6 +81,13 @@ public:
         }
         return result;
     }
+    // Vector3 convenience overload. Only a square 3x3 system maps a 3-vector to
+    // a 3-vector; for any other shape use the Matrix overload above.
+    template<std::size_t R=Rows,std::size_t C=Cols>
+    std::enable_if_t<R==3 && C==3 && R==Rows && C==Cols,Vector3> solve(const Vector3& rhs) const {
+        const auto result=solve(Matrix<3,1>{rhs.x,rhs.y,rhs.z});
+        return {result(0,0),result(1,0),result(2,0)};
+    }
 private:
     Matrix<Rows,Rows> orthogonal_=Matrix<Rows,Rows>::identity();
     Matrix<Rows,Cols> upper_;

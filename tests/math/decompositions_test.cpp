@@ -65,6 +65,7 @@ int main() {
         const PivotedLDLT<2> exchange(Matrix<2,2>{0,1,1,0});
         check(exchange.blockSizes()[0]==2);
         near(exchange.solve(Matrix<2,1>{2,3}),Matrix<2,1>{3,2});
+        check((PivotedLDLT<3>(positive).solve(Vector3{5,10,-3})-Vector3{1,3,-1}).norm()<1e-10);
         rejects<SingularMatrixError>([] { PivotedLDLT<2> solver(Matrix<2,2>{1,1,1,1}); });
         rejects<std::invalid_argument>([] { PivotedLDLT<2> solver(Matrix<2,2>{1,2,1,1}); });
         std::cout<<"PASS: LDLT indefinite pivots, permutations, 2x2 blocks and singular rejection\n";
@@ -78,6 +79,7 @@ int main() {
         const auto fit=qr.solve(observations);
         near(design.transposed()*(design*fit-observations),Matrix<2,1>{0,0});
         near(fit,Matrix<2,1>{.9,.9});
+        check((positive*HouseholderQR<3,3>(positive).solve(Vector3{5,10,-3})-Vector3{5,10,-3}).norm()<1e-10);
         const Matrix<3,2> deficient{1,2,2,4,3,6};
         check(HouseholderQR<3,2>(deficient).rank()==1);
         rejects<SingularMatrixError>([&] { HouseholderQR<3,2>(deficient).solve(Matrix<3,1>{1,2,3}); });
@@ -92,6 +94,7 @@ int main() {
         check(JacobiSVD<3,2>(deficient).rank()==1);
         near(JacobiSVD<3,2>(deficient).solve(Matrix<3,1>{1,2,3}),Matrix<2,1>{.2,.4});
         near(JacobiSVD<2,3>(Matrix<2,3>{1,0,1,0,1,1}).solve(Matrix<2,1>{1,1}),Matrix<3,1>{1./3,1./3,2./3});
+        check((positive*JacobiSVD<3,3>(positive).solve(Vector3{5,10,-3})-Vector3{5,10,-3}).norm()<1e-10);
         for (double scale:{1e-250,1e250}) {
             near(JacobiSVD<4,2>(design*scale).solve(observations*scale),fit);
             near(HouseholderQR<4,2>(design*scale).solve(observations*scale),fit);

@@ -106,7 +106,17 @@ public:
     }
 
     DroneObservables observe(const DroneState& state, const DroneControl& control, double time=0) const {
-        const auto rate = derivative(state, control, time);
+        return observeWith(state, control, derivative(state, control, time), time);
+    }
+
+    // Observables at a caller-supplied derivative. A coupled model evaluates the
+    // free derivative once, adds its constraint force to that copy, and reuses it
+    // here, so observe never recomputes an acceleration it already has.
+    DroneObservables observeWith(const DroneState& state, const DroneControl& control,
+                                 const DroneState& rate, double time=0) const {
+        if (!state.isFinite()) throw std::invalid_argument("Drone state must be finite");
+        if (!rate.isFinite()) throw std::overflow_error("Drone derivative is not representable");
+        validateControl(control);
         const auto momentum_B = inertia_B_ * state.angular_velocity_B;
         const double kinetic = 0.5 * mass_ * state.velocity_W.squaredNorm()
             + 0.5 * state.angular_velocity_B.dot(momentum_B);

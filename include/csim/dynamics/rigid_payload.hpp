@@ -88,39 +88,21 @@ public:
         return result;
     }
 
+    // Unconstrained taut tension. The free derivatives are evaluated here once and
+    // shared by tensionFrom, so callers that also need the derivative or the
+    // observables reuse the same two evaluations instead of repeating them.
     double tension(const RigidPayloadState& state, const DroneControl& control, double time=0) const {
-        const auto normal=direction(state);
-        const auto drone_rate=drone_.derivative(state.drone,control,time);
-        const auto payload_rate=payload_.derivative(state.payload,{},time);
-        const auto acceleration=[](const DroneState& body, const DroneState& rate, math::Vector3 offset) {
-            return rate.velocity_W+body.q_WB.rotate(rate.angular_velocity_B.cross(offset)
-                +body.angular_velocity_B.cross(body.angular_velocity_B.cross(offset)));
-        };
-        const auto relative=attachment(state.payload,payload_attachment_).velocity
-                           -attachment(state.drone,drone_attachment_).velocity;
-        const double radial=relative.dot(normal);
-        const double result=(normal.dot(acceleration(state.payload,payload_rate,payload_attachment_)
-                             -acceleration(state.drone,drone_rate,drone_attachment_))
-                            +(relative-normal*radial).squaredNorm()/distance(state))
-                            /inverseEffectiveMass(state,normal);
-        if (!std::isfinite(result)) throw std::overflow_error("Cable tension overflow");
-        return result;
+        return tensionFrom(state,freeRates(state,control,time));
     }
 
     RigidPayloadState derivative(const RigidPayloadState& state, const DroneControl& control,
                                  double time=0, bool enforce=true) const {
-        RigidPayloadState result{drone_.derivative(state.drone,control,time),
-                                 payload_.derivative(state.payload,{},time),state.slack};
+        const auto free=freeRates(state,control,time);
+        RigidPayloadState result{free.drone,free.payload,state.slack};
         if (!state.slack) {
-            const double cable_tension=tension(state,control,time);
+            const double cable_tension=tensionFrom(state,free);
             if (enforce && cable_tension<=0) throw CableDomainError("Rigid payload taut cable has lost tension");
-            const auto force=direction(state)*cable_tension;
-            result.drone.velocity_W+=force/drone_.mass();
-            result.payload.velocity_W-=force/payload_.mass();
-            result.drone.angular_velocity_B+=drone_solver_.solve(
-                drone_attachment_.cross(state.drone.q_WB.conjugated().rotate(force)));
-            result.payload.angular_velocity_B-=payload_solver_.solve(
-                payload_attachment_.cross(state.payload.q_WB.conjugated().rotate(force)));
+            applyCable(state,result,cable_tension);
         }
         if (!result.isFinite()) throw std::overflow_error("Rigid payload derivative overflow");
         return result;
@@ -171,13 +153,18 @@ public:
 
     RigidPayloadObservables observe(const RigidPayloadState& state, const DroneControl& control,
                                     double time=0, bool enforce=true) const {
-        const auto rate=derivative(state,control,time,enforce);
-        auto drone=drone_.observe(state.drone,control,time);
-        auto payload=payload_.observe(state.payload,{},time);
-        drone.acceleration_W=rate.drone.velocity_W;
-        drone.angular_acceleration_B=rate.drone.angular_velocity_B;
-        payload.acceleration_W=rate.payload.velocity_W;
-        payload.angular_acceleration_B=rate.payload.angular_velocity_B;
+        const auto free=freeRates(state,control,time);
+        RigidPayloadState rate{free.drone,free.payload,state.slack};
+        double cable_tension=0;
+        if (!state.slack) {
+            cable_tension=tensionFrom(state,free);
+            if (enforce && cable_tension<=0) throw CableDomainError("Rigid payload taut cable has lost tension");
+            applyCable(state,rate,cable_tension);
+        }
+        // The coupled rates already include the cable force, so the observables
+        // reuse them instead of overwriting the body-only accelerations.
+        auto drone=drone_.observeWith(state.drone,control,rate.drone,time);
+        auto payload=payload_.observeWith(state.payload,{},rate.payload,time);
         const double separation=distance(state);
         const auto normal=separation>0 ? direction(state) : math::Vector3{0,0,-1};
         const double radial=normal.dot(attachment(state.payload,payload_attachment_).velocity
@@ -186,10 +173,50 @@ public:
         if (!std::isfinite(energy)) throw std::overflow_error("Rigid payload energy overflow");
         return {drone,payload,attachment(state.drone,drone_attachment_),
             attachment(state.payload,payload_attachment_),normal,separation,radial,
-            state.slack ? 0 : tension(state,control,time),energy};
+            state.slack ? 0 : cable_tension,energy};
     }
 
 private:
+    // Free (uncoupled) derivatives of both bodies. Tension and the coupled
+    // derivative are both explicit functions of these, so they are evaluated once
+    // per call site instead of once per consumer.
+    struct FreeRates { DroneState drone; DroneState payload; };
+
+    FreeRates freeRates(const RigidPayloadState& state,const DroneControl& control,double time) const {
+        return {drone_.derivative(state.drone,control,time),payload_.derivative(state.payload,{},time)};
+    }
+
+    static math::Vector3 attachmentAcceleration(const DroneState& body,const DroneState& rate,
+                                                math::Vector3 offset) {
+        return rate.velocity_W+body.q_WB.rotate(rate.angular_velocity_B.cross(offset)
+            +body.angular_velocity_B.cross(body.angular_velocity_B.cross(offset)));
+    }
+
+    double tensionFrom(const RigidPayloadState& state,const FreeRates& free) const {
+        const auto normal=direction(state);
+        const auto relative=attachment(state.payload,payload_attachment_).velocity
+                           -attachment(state.drone,drone_attachment_).velocity;
+        const double radial=relative.dot(normal);
+        const double result=(normal.dot(attachmentAcceleration(state.payload,free.payload,payload_attachment_)
+                             -attachmentAcceleration(state.drone,free.drone,drone_attachment_))
+                            +(relative-normal*radial).squaredNorm()/distance(state))
+                            /inverseEffectiveMass(state,normal);
+        if (!std::isfinite(result)) throw std::overflow_error("Cable tension overflow");
+        return result;
+    }
+
+    // Add the taut cable force to a derivative/rate pair. Same arithmetic as
+    // applyImpulse, but the target holds accelerations instead of velocities.
+    void applyCable(const RigidPayloadState& state,RigidPayloadState& rate,double cable_tension) const {
+        const auto force=direction(state)*cable_tension;
+        rate.drone.velocity_W+=force/drone_.mass();
+        rate.payload.velocity_W-=force/payload_.mass();
+        rate.drone.angular_velocity_B+=drone_solver_.solve(
+            drone_attachment_.cross(state.drone.q_WB.conjugated().rotate(force)));
+        rate.payload.angular_velocity_B-=payload_solver_.solve(
+            payload_attachment_.cross(state.payload.q_WB.conjugated().rotate(force)));
+    }
+
     Drone drone_;
     Drone payload_;
     math::PartialPivLU<3> drone_solver_;
