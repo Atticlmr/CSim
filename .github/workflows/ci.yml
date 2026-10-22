@@ -104,3 +104,38 @@ jobs:
           python3 tests/viewer/check_image.py "$GITHUB_WORKSPACE/build/viewer-live.ppm"
           xvfb-run -a xmake run viewer "$GITHUB_WORKSPACE/build/ci-flight.csv" --hidden --frames 121 --screenshot "$GITHUB_WORKSPACE/build/viewer-replay.ppm"
           python3 tests/viewer/check_image.py "$GITHUB_WORKSPACE/build/viewer-replay.ppm"
+
+  # Keeps the secondary CMake build from drifting away from xmake.
+  # Scope matches the default CMake configuration: core libraries, simulator and
+  # the C++ test suite, with no Python or graphics dependencies.
+  cmake:
+    name: CMake / ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [Debug, Release]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install XML dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libtinyxml2-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-cmake
+          -DCMAKE_BUILD_TYPE=${{ matrix.mode }}
+          -DCSIM_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-cmake --parallel 2
+
+      - name: Run CTest
+        run: ctest --test-dir build-cmake --output-on-failure
