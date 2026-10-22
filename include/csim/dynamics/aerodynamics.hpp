@@ -66,9 +66,14 @@ struct DragConfig {
         };
         if (enabled()) {
             terms(result.air_velocity_W,result);
-            AirLoads still_air; terms(velocity,still_air);
             // Diagnostic counterfactual difference, NOT an additional applied force.
-            result.wind_induced_force_W=result.total_force_W-still_air.total_force_W;
+            // In still air the relative and still-air velocities are the same
+            // value, so the two loads agree bit for bit and the difference is
+            // exactly zero without evaluating the second load.
+            if (wind.x!=0||wind.y!=0||wind.z!=0) {
+                AirLoads still_air; terms(velocity,still_air);
+                result.wind_induced_force_W=result.total_force_W-still_air.total_force_W;
+            }
             result.air_power=result.total_force_W.dot(result.air_velocity_W);
             result.mechanical_power=result.total_force_W.dot(velocity);
             if (!result.wind_induced_force_W.isFinite()||!std::isfinite(result.air_power)||!std::isfinite(result.mechanical_power))
