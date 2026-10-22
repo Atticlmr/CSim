@@ -16,6 +16,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# A plain `cmake -S . -B <dir>` leaves CMAKE_BUILD_TYPE empty, which compiles
+# with no optimization flag at all. Default that single-config case to -O2 so
+# the ordinary build is usable; an explicit -DCMAKE_BUILD_TYPE, or a
+# multi-config generator that selects the configuration at build time, wins.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "CMAKE_BUILD_TYPE is empty; compiling with -O2")
+    add_compile_options(-O2)
+endif()
+
 find_package(Threads REQUIRED)
 
 add_library(csim_numerics INTERFACE)
