@@ -1,0 +1,10 @@
+CSim
+Copyright 2026 Atticli
+
+This product includes software developed as part of the CSim project
+(https://github.com/Atticlmr/CSim).
+
+Third-party components used at build or run time, and their licenses, are
+listed in the "许可证" section of README.md. Those components are not
+included in this repository's source tree; they are provided by the system
+package manager, pip, or build-time detection.
