@@ -171,7 +171,10 @@ inline Result advance(const dynamics::SuspendedPayload& physics, const Integrato
             append({"release",time,{},0,0,0,true});
         }
     }
-    (void)physics.observe(result.state,control,end,false);
+    // Every accepted state was checked by the propagate callback, so only the
+    // energy contract still needs an explicit evaluation here.
+    numerics::detail::checkComputedState(result.state);
+    (void)physics.energy(result.state);
     if (!result.impulse_W.isFinite()) throw std::overflow_error("Cable impulse sum overflow");
     return result;
 }

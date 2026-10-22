@@ -6,7 +6,7 @@ namespace csim::simulation::integration_detail {
 inline dynamics::SuspendedPayloadState pointRattle(const dynamics::SuspendedPayload& physics,
         dynamics::SuspendedPayloadState state,const dynamics::DroneControl& control,double time,double dt,
         bool enforce=true) {
-    (void)physics.observe(state,control,time,enforce);
+    physics.validateAt(state,control,time,enforce);
     if (state.slack) {
         const auto result=numerics::LieGroupIntegrator<dynamics::SuspendedPayloadState,LieGeometry<dynamics::SuspendedPayloadState>>::step(
             time,state,control,dt,[&](double stage,const auto& value,const auto& input) {
@@ -48,7 +48,7 @@ inline dynamics::SuspendedPayloadState pointRattle(const dynamics::SuspendedPayl
         result.second(4,0)/payload_mass-state.drone.velocity_W.y,result.second(5,0)/payload_mass-state.drone.velocity_W.z};
     state.cable_direction_W=delta.normalized(); state.cable_angular_velocity_W=state.cable_direction_W.cross(relative)/physics.length();
     state=dynamics::SuspendedPayload::projectedState(state,physics.length());
-    (void)physics.observe(state,control,time+dt,enforce);
+    physics.validateAt(state,control,time+dt,enforce);
     return state;
 }
 }

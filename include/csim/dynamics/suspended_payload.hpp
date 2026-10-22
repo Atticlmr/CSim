@@ -217,6 +217,46 @@ public:
         return forces(valid,control,time,false).tension;
     }
 
+    // Total mechanical energy of the coupled pair. Throws when it is not
+    // representable; the per-step boundary uses this instead of observe().
+    double energy(const SuspendedPayloadState& input) const {
+        const auto valid=normalizedState(input,length_);
+        const auto payload_position=valid.slack ? valid.payload_position_W
+            : valid.drone.position_W+valid.cable_direction_W*length_;
+        const auto payload_velocity=valid.slack ? valid.payload_velocity_W
+            : valid.drone.velocity_W+valid.cable_angular_velocity_W.cross(valid.cable_direction_W)*length_;
+        return drone_.energyOf(valid.drone)+0.5*payload_mass_*payload_velocity.squaredNorm()
+            +payload_mass_*drone_.gravity()*payload_position.z;
+    }
+
+    // Boundary check for callers that only need to know whether observe() would
+    // succeed. Same checks in the same order; the reported vectors and powers
+    // are not assembled.
+    void validateAt(const SuspendedPayloadState& input, const DroneControl& control,
+                    double time=0, bool enforce_tension=true) const {
+        const auto valid=normalizedState(input,length_);
+        const auto payload_position=valid.slack ? valid.payload_position_W
+            : valid.drone.position_W+valid.cable_direction_W*length_;
+        const auto payload_velocity=valid.slack ? valid.payload_velocity_W
+            : valid.drone.velocity_W+valid.cable_angular_velocity_W.cross(valid.cable_direction_W)*length_;
+        const auto separation=payload_position-valid.drone.position_W;
+        const double distance=separation.norm();
+        if (!std::isfinite(distance) || (!valid.slack && (distance <= 0 ||
+            ((separation/length_)-valid.cable_direction_W).norm()>1e-10)))
+            throw std::overflow_error("World coordinates cannot resolve cable geometry accurately");
+        const auto payload_air=payloadAirLoads(valid,time);
+        const double payload_load=payload_drag_.enabled()
+            ? (payload_air.total_force_W/payload_mass_).norm() : 0;
+        drone_.validateAt(valid.drone,control,time);
+        if (!valid.slack) (void)forces(valid,control,time,enforce_tension);
+        const double energy=drone_.energyOf(valid.drone)
+            +0.5*payload_mass_*payload_velocity.squaredNorm()
+            +payload_mass_*drone_.gravity()*payload_position.z;
+        if (!payload_position.isFinite()||!payload_velocity.isFinite()
+            ||!std::isfinite(payload_load)||!std::isfinite(energy))
+            throw std::overflow_error("Coupled observables overflowed");
+    }
+
     private:
     struct CableForces { double tension; math::Vector3 force; math::Vector3 alpha; };
     CableForces forces(const SuspendedPayloadState& state,const DroneControl& control,double time,bool enforce) const {

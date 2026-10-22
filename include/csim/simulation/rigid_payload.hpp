@@ -147,20 +147,27 @@ inline Result advance(const RigidPayloadModel& model, dynamics::RigidPayloadStat
     double time=start;
     while (time<end) {
         auto& current=result.state;
-        if (!current.slack && physics.tension(current,control,time)<=0) {
+        // guard() is -tension while taut and distance-length while slack, so one
+        // evaluation also answers the release/engagement preconditions instead of
+        // recomputing the same quantity at the same state and time.
+        double before=guard(current,time);
+        if (!current.slack && before>=0) {
             current.slack=true;
             append({"release",time,{},0,0,0,true});
+            before=guard(current,time);
         }
-        if (current.slack && physics.distance(current)>=physics.length()-epsilon) {
+        if (current.slack && before>=-epsilon) {
             const double radial=physics.radialVelocity(current);
-            if (radial>1e-10 || (std::abs(radial)<=1e-10 && physics.tension(current,control,time)>0))
+            if (radial>1e-10 || (std::abs(radial)<=1e-10 && physics.tension(current,control,time)>0)) {
                 impact(current,time);
+                before=guard(current,time);
+            }
         }
         double target=std::min(end,time+settings.max_step);
         if (end-target<=8*std::numeric_limits<double>::epsilon()*std::max(std::abs(end),std::abs(time))) target=end;
         if (!(target>time)) throw numerics::IntegrationFailure("Rigid cable time cannot advance");
         auto candidate=propagate(current,time,target-time);
-        const double before=guard(current,time),after=guard(candidate,target);
+        const double after=guard(candidate,target);
         const bool crossing=current.slack ? (after>epsilon || (before<-epsilon && after>=0)) : after>=0;
         if (!crossing) { current=candidate; time=target; continue; }
         double lower=time,upper=target;
@@ -179,7 +186,10 @@ inline Result advance(const RigidPayloadModel& model, dynamics::RigidPayloadStat
             append({"release",time,{},0,0,0,true});
         }
     }
-    (void)physics.observe(result.state,control,end,false);
+    // The guard already evaluated the tension on this state, and propagate
+    // checked every accepted state, so only the energy contract remains here.
+    numerics::detail::checkComputedState(result.state);
+    (void)physics.energy(result.state);
     return result;
 }
 }
@@ -203,7 +213,7 @@ public:
     }
     void setControl(dynamics::DroneControl control) {
         auto candidate=rigid_cable_detail::admissible(*model_,state_,control,time_);
-        (void)model_->physics().observe(candidate,control,time_,!model_->hybridCable());
+        model_->physics().validateAt(candidate,control,time_,!model_->hybridCable());
         const bool released=!state_.slack && candidate.slack;
         auto events=events_;
         if (released) events.push_back({"release",time_,{},0,0,0,true});
@@ -225,7 +235,7 @@ public:
         if (!model_) throw std::invalid_argument("Rigid payload model must not be null");
         auto candidate=model_->physics().validated(state);
         candidate=rigid_cable_detail::admissible(*model_,candidate,control,0);
-        (void)model_->physics().observe(candidate,control,0,!model_->hybridCable());
+        model_->physics().validateAt(candidate,control,0,!model_->hybridCable());
         state_=candidate;
         control_=control;
         time_=0;

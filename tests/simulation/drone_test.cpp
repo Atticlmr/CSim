@@ -147,6 +147,9 @@ void identityAndAtomicFailures() {
     setControl(*model, data, {10,{0,0,0.01}});
     throws<std::invalid_argument>([&]{ setControl(*model,data,{-1,{}}); });
     throws<std::overflow_error>([&]{ setControl(*model,data,{0,{0,0,1e308}}); });
+    // The derivative is representable here; only the energy is not, so the
+    // boundary must reject it without falling back to the derivative check.
+    throws<std::overflow_error>([&]{ reset(*model,data,{{0,0,1e308},{},{1,0,0,0},{}}); });
     throws<std::domain_error>([&]{ reset(*model,data,{{},{},{0,0,0,0},{}}); });
     near(getState(*model,data).control.thrust, 10, 0);
     near(getState(*model,data).control.torque_B, {0,0,0.01}, 0);

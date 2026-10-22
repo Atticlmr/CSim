@@ -66,7 +66,7 @@ private:
 inline DroneData makeData(std::shared_ptr<DroneModel> model, dynamics::DroneState state) {
     if (!model) throw std::invalid_argument("Simulation model must not be null");
     const auto candidate = dynamics::Drone::normalizedState(state);
-    (void)model->physics().observe(candidate, {});
+    model->physics().validateAt(candidate, {});
     return DroneData(std::move(model), candidate);
 }
 
@@ -78,7 +78,7 @@ inline DroneSnapshot getState(const DroneModel& model, const DroneData& data) {
 // Actual physical wrench, held constant during the next physical timestep.
 inline void setControl(const DroneModel& model, DroneData& data, dynamics::DroneControl control) {
     if (&model != data.model_.get()) throw std::invalid_argument("Data belongs to a different model");
-    (void)model.physics().observe(data.state_, control, data.time_);
+    model.physics().validateAt(data.state_, control, data.time_);
     data.control_ = control;
 }
 
@@ -87,7 +87,7 @@ inline void step(const DroneModel& model, DroneData& data) {
     const auto candidate = integration_detail::advance(model.integration(),data.time_,data.state_,model.timestep(),
         [&](double t,const dynamics::DroneState& state,int) { return model.physics().derivative(state,data.control_,t); },
         [](dynamics::DroneState state) { return dynamics::Drone::normalizedState(state); },
-        [&](const dynamics::DroneState& state,double t) { (void)model.physics().observe(state,data.control_,t); });
+        [&](const dynamics::DroneState& state,double t) { (void)model.physics().validateObservables(state,data.control_,t); });
     data.state_ = candidate;
     data.time_ += model.timestep();
 }
@@ -95,7 +95,7 @@ inline void step(const DroneModel& model, DroneData& data) {
 inline void reset(const DroneModel& model, DroneData& data, dynamics::DroneState state) {
     if (&model != data.model_.get()) throw std::invalid_argument("Data belongs to a different model");
     const auto candidate = dynamics::Drone::normalizedState(state);
-    (void)model.physics().observe(candidate, {});
+    model.physics().validateAt(candidate, {});
     data.state_ = candidate;
     data.control_ = {}; // Reset returns to zero input, not hover thrust.
     data.time_ = 0;

@@ -145,8 +145,12 @@ struct Quaternion {
             2 * (q.x * q.z - q.w * q.y), 2 * (q.y * q.z + q.w * q.x), 1 - 2 * (q.x * q.x + q.y * q.y)};
     }
 
+    // Hamilton form: v + 2w(q_v x v) + 2 q_v x (q_v x v). Equivalent to the
+    // rotation matrix, but avoids building nine entries and the double scaling
+    // division. Normalization stays first so the stored components are still
+    // never read as a unit quaternion.
     Vector3 rotate(const Vector3& vector) const {
-        const Matrix3 rotation = toRotationMatrix();
+        const Quaternion q = normalized();
         if (!vector.isFinite()) {
             throw std::invalid_argument("Rotated vector must be finite");
         }
@@ -154,7 +158,11 @@ struct Quaternion {
         if (scale == 0.0) {
             return {};
         }
-        const Vector3 result = (rotation * (vector / scale)) * scale;
+        // Scaling first permits rotation when the original norm overflows.
+        const Vector3 unit = vector / scale;
+        const Vector3 axis{q.x, q.y, q.z};
+        const Vector3 twice = axis.cross(unit) * 2.0;
+        const Vector3 result = (unit + twice * q.w + axis.cross(twice)) * scale;
         if (!result.isFinite()) {
             throw std::overflow_error("Rotated vector is not representable");
         }

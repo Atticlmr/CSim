@@ -88,7 +88,7 @@ inline SuspendedPayloadData makeData(std::shared_ptr<SuspendedPayloadModel> mode
     auto candidate = dynamics::SuspendedPayload::normalizedState(state,model->physics().length());
     if (model->hybridCable()) candidate=cable_detail::admissible(model->physics(),candidate,control,0);
     // Validate the initial state once; construction only stores the same control.
-    (void)model->physics().observe(candidate, control, 0, !model->hybridCable());
+    model->physics().validateAt(candidate, control, 0, !model->hybridCable());
     return SuspendedPayloadData(model, control, candidate);
 }
 
@@ -102,7 +102,7 @@ inline SuspendedPayloadSnapshot getState(const SuspendedPayloadModel& model, con
 // Actual physical wrench, held constant during the next physical timestep.
 inline void setControl(const SuspendedPayloadModel& model, SuspendedPayloadData& data, dynamics::DroneControl control) {
     if (&model != data.model_.get()) throw std::invalid_argument("Data belongs to a different model");
-    (void)model.physics().observe(data.state_, control, data.time_, !model.hybridCable());
+    model.physics().validateAt(data.state_, control, data.time_, !model.hybridCable());
     auto candidate=data.state_;
     auto events=data.events_;
     bool released=false;
@@ -112,7 +112,7 @@ inline void setControl(const SuspendedPayloadModel& model, SuspendedPayloadData&
         if (released)
             events.push_back({"release",data.time_,{},0,0,0,true});
     }
-    (void)model.physics().observe(candidate,control,data.time_,!model.hybridCable());
+    model.physics().validateAt(candidate,control,data.time_,!model.hybridCable());
     data.events_=std::move(events);
     data.pending_release_=data.pending_release_ || released;
     data.state_=candidate;
@@ -135,7 +135,7 @@ inline void step(const SuspendedPayloadModel& model, SuspendedPayloadData& data)
             : integration_detail::advance(model.integration(),data.time_,data.state_,model.timestep(),
             [&](double t,const dynamics::SuspendedPayloadState& state,int) { return model.physics().derivative(state,data.control_,t); },
             [&](dynamics::SuspendedPayloadState state) { return dynamics::SuspendedPayload::projectedState(state,model.physics().length()); },
-            [&](const dynamics::SuspendedPayloadState& state,double t) { (void)model.physics().observe(state,data.control_,t); });
+            [&](const dynamics::SuspendedPayloadState& state,double t) { model.physics().validateAt(state,data.control_,t); });
         data.state_=candidate;
         data.events_.clear();
         data.last_impulse_W_={};
@@ -150,7 +150,7 @@ inline void reset(const SuspendedPayloadModel& model, SuspendedPayloadData& data
     if (state.slack && !model.hybridCable()) throw std::invalid_argument("Slack state requires cable_mode=hybrid");
     auto candidate = dynamics::SuspendedPayload::normalizedState(state,model.physics().length());
     if (model.hybridCable()) candidate=cable_detail::admissible(model.physics(),candidate,control,0);
-    (void)model.physics().observe(candidate, control, 0, !model.hybridCable());
+    model.physics().validateAt(candidate, control, 0, !model.hybridCable());
     data.state_ = candidate;
     data.control_ = control;
     data.last_impulse_W_={};

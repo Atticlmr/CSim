@@ -118,15 +118,48 @@ public:
         if (!rate.isFinite()) throw std::overflow_error("Drone derivative is not representable");
         validateControl(control);
         const auto momentum_B = inertia_B_ * state.angular_velocity_B;
+        // Air loads stay ahead of the energy check so the observable throw order
+        // is unchanged by sharing the energy with validateAt.
+        const auto aerodynamics = airLoads(state, time);
+        return {rate.velocity_W, rate.angular_velocity_B,
+            state.q_WB.rotate({0, 0, control.thrust}), state.q_WB.rotate(momentum_B),
+            energyOf(state, momentum_B), aerodynamics};
+    }
+
+    // Kinetic plus potential energy about z = 0. Shared by observeWith and the
+    // boundary checks so the representability rule cannot drift between them.
+    double energyOf(const DroneState& state, const math::Vector3& momentum_B) const {
         const double kinetic = 0.5 * mass_ * state.velocity_W.squaredNorm()
             + 0.5 * state.angular_velocity_B.dot(momentum_B);
-        const DroneObservables result{rate.velocity_W, rate.angular_velocity_B,
-            state.q_WB.rotate({0, 0, control.thrust}), state.q_WB.rotate(momentum_B),
-            kinetic + mass_ * gravity_ * state.position_W.z,airLoads(state,time)};
-        if (!std::isfinite(kinetic) || !std::isfinite(result.energy)) {
+        const double total = kinetic + mass_ * gravity_ * state.position_W.z;
+        if (!std::isfinite(kinetic) || !std::isfinite(total)) {
             throw std::overflow_error("Drone energy is not representable");
         }
-        return result;
+        return total;
+    }
+
+    double energyOf(const DroneState& state) const {
+        return energyOf(state, inertia_B_ * state.angular_velocity_B);
+    }
+
+    // Boundary check for callers that only need to know whether observe() would
+    // succeed. Same exceptions in the same order; the two reported vectors are
+    // skipped because neither can overflow for a finite state and control.
+    void validateAt(const DroneState& state, const DroneControl& control, double time=0) const {
+        const auto rate = derivative(state, control, time);
+        if (!rate.isFinite()) throw std::overflow_error("Drone derivative is not representable");
+        (void)airLoads(state, time);
+        (void)energyOf(state);
+    }
+
+    // Check for a state that a projection just made finite and a control that
+    // already passed validateAt. Only the reported quantities can still fail,
+    // so the derivative is not evaluated again.
+    void validateObservables(const DroneState& state, const DroneControl& control, double time=0) const {
+        if (!state.isFinite()) throw std::invalid_argument("Drone state must be finite");
+        validateControl(control);
+        (void)airLoads(state, time);
+        (void)energyOf(state);
     }
 
 private:
