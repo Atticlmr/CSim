@@ -33,7 +33,7 @@ inline DroneState operator*(const DroneState& state, double scalar) noexcept {
             state.q_WB * scalar, state.angular_velocity_B * scalar};
 }
 
-// Actual applied thrust and body torque, not a feedback controller or command.
+// Actual applied thrust and body torque.
 struct DroneControl {
     double thrust = 0; // N, along +Z_B, nonnegative; held for a full physical step.
     math::Vector3 torque_B{}; // N m, about the centre of mass.
