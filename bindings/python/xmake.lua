@@ -5,8 +5,13 @@ local function configure_python(target)
         assert(target:is_plat("linux", "macosx") and target:plat() == os.host()
                and target:arch() == os.arch(),
                "Python bindings currently require a native Linux or macOS build")
-        local python = assert(find_tool(config.get("python_executable"), {force = true}),
-                              "Selected Python interpreter not found")
+        -- find_tool() treats its argument as a tool name, so an absolute path to
+        -- a virtual environment would silently resolve to the interpreter on
+        -- PATH. Use an existing path as given and only fall back to detection.
+        local requested = config.get("python_executable")
+        local python = os.isfile(requested) and {program = requested}
+                       or find_tool(requested, {force = true})
+        assert(python, "Selected Python interpreter not found: " .. tostring(requested))
         local info = json.decode(os.iorunv(python.program, {
             path.join(os.projectdir(), "bindings/python/build_info.py")}))
         target:add("sysincludedirs", info.include_dirs)
