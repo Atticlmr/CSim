@@ -1,6 +1,6 @@
 set_xmakever("3.1.1")
 set_project("CSim")
-set_version("0.0.1")
+set_version("0.1.0")
 set_languages("cxx17")
 add_rules("mode.debug", "mode.release")
 

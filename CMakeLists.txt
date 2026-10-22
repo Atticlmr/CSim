@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(CSim VERSION 0.0.1 LANGUAGES CXX)
+project(CSim VERSION 0.1.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CTest)
