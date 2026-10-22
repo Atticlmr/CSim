@@ -41,7 +41,7 @@ public:
                       IntegratorSettings integration={}, dynamics::DragConfig drone_drag={},
                       dynamics::DragConfig payload_drag={}, dynamics::WindField wind={})
         : drone_asset_(requireAsset(std::move(drone))),payload_asset_(requireAsset(std::move(payload))),
-          cable_(std::move(cable)),timestep_(timestep),integration_(std::move(integration)),
+          cable_(std::move(cable)),hybrid_(cable_.mode=="hybrid"),timestep_(timestep),integration_(std::move(integration)),
           physics_(drone_asset_->mass,drone_asset_->inertia_B,payload_asset_->mass,payload_asset_->inertia_B,
               cableAttachment(*drone_asset_),cableAttachment(*payload_asset_),cable_.length,
               gravity,drone_drag,payload_drag,wind) {
@@ -55,7 +55,7 @@ public:
     const auto& cable() const { return cable_; }
     const auto& integration() const { return integration_; }
     double timestep() const { return timestep_; }
-    bool hybridCable() const { return cable_.mode=="hybrid"; }
+    bool hybridCable() const { return hybrid_; }
     dynamics::RigidPayloadState initialState() const {
         dynamics::RigidPayloadState state;
         state.drone.position_W=drone_asset_->initial_pose_WB.position;
@@ -74,6 +74,7 @@ private:
     const std::shared_ptr<const model::RigidBodyAsset> drone_asset_;
     const std::shared_ptr<const model::RigidBodyAsset> payload_asset_;
     const RigidCableSettings cable_;
+    const bool hybrid_; // Resolved once so the hot path never compares strings.
     const double timestep_;
     const IntegratorSettings integration_;
     const dynamics::RigidPayload physics_;
@@ -99,21 +100,23 @@ inline Result advance(const RigidPayloadModel& model, dynamics::RigidPayloadStat
     const auto& physics=model.physics();
     const auto& settings=model.cable().events;
     const double end=start+model.timestep();
+    // Resolved once; the strict taut mode is the one that enforces tension.
+    const bool hybrid=model.hybridCable();
     std::size_t work=0;
     auto propagate=[&](const dynamics::RigidPayloadState& initial,double time,double interval) {
         return integration_detail::advance(model.integration(),time,initial,interval,
             [&](double stage,const dynamics::RigidPayloadState& value,int) {
-                return physics.derivative(value,control,stage,!model.hybridCable());
+                return physics.derivative(value,control,stage,!hybrid);
             },
             [&](dynamics::RigidPayloadState value) { return physics.projected(value); },
             [&](const dynamics::RigidPayloadState& value,double time_value) {
                 if (++work>model.integration().max_substeps)
                     throw numerics::IntegrationFailure("Rigid cable exceeded max_substeps");
-                if (!model.hybridCable()) (void)physics.observe(value,control,time_value);
+                if (!hybrid) (void)physics.observe(value,control,time_value);
                 numerics::detail::checkComputedState(value);
             });
     };
-    if (!model.hybridCable()) return {propagate(state,start,model.timestep()),{}};
+    if (!hybrid) return {propagate(state,start,model.timestep()),{}};
     Result result{state,{}};
     auto append=[&](CableEvent event) {
         if (result.events.size()>=settings.max_events)

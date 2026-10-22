@@ -15,7 +15,7 @@ public:
                           math::Matrix3 inertia_B = dynamics::Drone::defaultInertia(),
                           double gravity = 9.80665, double timestep = 0.001,
                std::shared_ptr<const model::RigidBodyAsset> asset = {}, dynamics::DragConfig drone_drag = {}, dynamics::DragConfig payload_drag = {}, dynamics::WindField wind = {}, IntegratorSettings integration = {}, std::string cable_mode = "taut", CableEventSettings events = {})
-        : physics_(drone_mass, payload_mass, length, inertia_B, gravity, drone_drag, payload_drag, wind), timestep_(timestep), integration_(std::move(integration)), cable_mode_(std::move(cable_mode)), events_(events), asset_(std::move(asset)) {
+        : physics_(drone_mass, payload_mass, length, inertia_B, gravity, drone_drag, payload_drag, wind), timestep_(timestep), integration_(std::move(integration)), cable_mode_(std::move(cable_mode)), hybrid_(cable_mode_ == "hybrid"), events_(events), asset_(std::move(asset)) {
         integration_.validate(false,true,true);
         if (integration_.method=="rattle" && (drone_drag.enabled() || payload_drag.enabled()))
             throw std::invalid_argument("RATTLE point payload currently requires zero aerodynamic drag");
@@ -30,12 +30,13 @@ public:
     const auto& asset() const noexcept { return asset_; }
     const std::string& cableMode() const noexcept { return cable_mode_; }
     const CableEventSettings& events() const noexcept { return events_; }
-    bool hybridCable() const noexcept { return cable_mode_ == "hybrid"; }
+    bool hybridCable() const noexcept { return hybrid_; }
 private:
     const dynamics::SuspendedPayload physics_;
     const double timestep_;
     const IntegratorSettings integration_;
     const std::string cable_mode_;
+    const bool hybrid_; // Resolved once so the hot path never compares strings.
     const CableEventSettings events_;
     const std::shared_ptr<const model::RigidBodyAsset> asset_;
 };
