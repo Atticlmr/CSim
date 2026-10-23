@@ -28,6 +28,7 @@ endif()
 find_package(Threads REQUIRED)
 
 add_library(csim_numerics INTERFACE)
+target_compile_features(csim_numerics INTERFACE cxx_std_17)
 target_include_directories(csim_numerics INTERFACE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -66,6 +67,16 @@ function(csim_add_test target source)
     add_executable(${target} ${source})
     target_link_libraries(${target} PRIVATE ${ARGN})
     add_test(NAME ${target} COMMAND ${target})
+endfunction()
+
+function(csim_sync_directory target directory source)
+    add_custom_target(${target}_${directory}
+        COMMAND ${CMAKE_COMMAND}
+            "-DSOURCE=${source}"
+            "-DDESTINATION=$<TARGET_FILE_DIR:${target}>/${directory}"
+            -P "${PROJECT_SOURCE_DIR}/cmake/SyncDirectory.cmake"
+        VERBATIM)
+    add_dependencies(${target} ${target}_${directory})
 endfunction()
 
 if(CSIM_BUILD_TESTS)
@@ -119,10 +130,8 @@ if(CSIM_BUILD_PYTHON)
     target_compile_definitions(csim PRIVATE CSIM_PYTHON_BUILD)
 
     foreach(python_package csim_control csim_experiments csim_bridge)
-        add_custom_command(TARGET csim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${PROJECT_SOURCE_DIR}/bindings/python/${python_package}
-                $<TARGET_FILE_DIR:csim>/${python_package})
+        csim_sync_directory(csim ${python_package}
+            "${PROJECT_SOURCE_DIR}/bindings/python/${python_package}")
     endforeach()
 
     if(CSIM_BUILD_PYTHON_TESTS)
@@ -169,10 +178,8 @@ if(CSIM_BUILD_VIEWER)
         apps/viewer/trajectory.cpp)
     target_include_directories(viewer PRIVATE apps/viewer)
     target_link_libraries(viewer PRIVATE csim_simulation ${CSIM_GLFW_TARGET} OpenGL::GL)
-    add_custom_command(TARGET viewer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${PROJECT_SOURCE_DIR}/bindings/python/csim_viewer/shaders
-            $<TARGET_FILE_DIR:viewer>/shaders)
+    csim_sync_directory(viewer shaders
+        "${PROJECT_SOURCE_DIR}/bindings/python/csim_viewer/shaders")
 endif()
 
 if(CSIM_BUILD_PYTHON AND CSIM_BUILD_VIEWER)
@@ -184,10 +191,8 @@ if(CSIM_BUILD_PYTHON AND CSIM_BUILD_VIEWER)
     set_target_properties(csim_python_viewer PROPERTIES OUTPUT_NAME _csim_viewer)
     target_include_directories(csim_python_viewer PRIVATE apps/viewer)
     target_link_libraries(csim_python_viewer PRIVATE csim_simulation ${CSIM_GLFW_TARGET} OpenGL::GL)
-    add_custom_command(TARGET csim_python_viewer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${PROJECT_SOURCE_DIR}/bindings/python/csim_viewer
-            $<TARGET_FILE_DIR:csim_python_viewer>/csim_viewer)
+    csim_sync_directory(csim_python_viewer csim_viewer
+        "${PROJECT_SOURCE_DIR}/bindings/python/csim_viewer")
 endif()
 
 set(CSIM_INSTALL_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/CSim)

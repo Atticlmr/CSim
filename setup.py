@@ -102,9 +102,15 @@ class CMakeBuildExt(build_ext):
             [sys.executable, "-m", "pybind11", "--cmakedir"], text=True).strip()
         with tempfile.TemporaryDirectory(prefix="csim-cmake-wheel-") as directory:
             build_dir = Path(directory) / "build"
+            output_dir = Path(directory) / "extensions"
+            configuration = "Release"
             configure = [
                 cmake, "-S", str(ROOT), "-B", str(build_dir),
-                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_BUILD_TYPE=" + configuration,
+                "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + str(output_dir),
+                "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE=" + str(output_dir),
+                "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=" + str(output_dir),
+                "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + str(output_dir),
                 "-DCSIM_BUILD_TESTS=OFF",
                 "-DCSIM_BUILD_PYTHON=ON",
                 "-DCSIM_BUILD_VIEWER=" + ("ON" if BUILD_VIEWER else "OFF"),
@@ -118,7 +124,8 @@ class CMakeBuildExt(build_ext):
             if BUILD_VIEWER:
                 targets.append("csim_python_viewer")
             for target in targets:
-                command = [cmake, "--build", str(build_dir), "--target", target]
+                command = [cmake, "--build", str(build_dir), "--config", configuration,
+                           "--target", target]
                 if self.parallel:
                     command.extend(["--parallel", str(self.parallel)])
                 subprocess.run(command, check=True)
@@ -126,7 +133,7 @@ class CMakeBuildExt(build_ext):
             suffix = sysconfig.get_config_var("EXT_SUFFIX")
             for extension in self.extensions:
                 name = extension.name.rsplit(".", 1)[-1]
-                source = build_dir / (name + suffix)
+                source = output_dir / (name + suffix)
                 if not source.is_file():
                     raise RuntimeError(f"CMake did not produce {source}")
                 destination = Path(self.get_ext_fullpath(extension.name)).resolve()

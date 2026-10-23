@@ -1,4 +1,5 @@
-include LICENSE NOTICE README.md xmake.lua pyproject.toml setup.py
+include LICENSE NOTICE README.md xmake.lua pyproject.toml setup.py CMakeLists.txt
+recursive-include cmake *.cmake *.in
 recursive-include include *.hpp
 recursive-include bindings *.hpp *.cpp *.py *.lua *.vert *.frag
 recursive-include apps *.cpp *.hpp *.lua *.vert *.frag
